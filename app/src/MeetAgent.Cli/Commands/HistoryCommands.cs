@@ -40,7 +40,7 @@ public static class HistoryCommands
         var q = args.Get("q") ?? string.Join(' ', argv.Skip(1).Where(a => !a.StartsWith("--")));
         using var store = Store.Open();
         foreach (var h in store.Search(q, args.GetInt("limit", 20)))
-            Console.WriteLine($"#{h.MeetingId} {h.MeetingTitle} [{TimeFormat.Hms(h.Segment.Start)}] [{h.Segment.Speaker}] {h.Snippet}");
+            Console.WriteLine($"#{h.MeetingId} {h.MeetingTitle} [{TimeFormat.Hms(h.Segment.Start)}] [{h.Segment.Label}] {h.Snippet}");
         return 0;
     }
 }

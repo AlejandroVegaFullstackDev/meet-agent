@@ -19,7 +19,7 @@ public static class MarkdownExporter
         sb.Append("- Consentimiento: ").Append(meeting.Consent).Append('\n');
         sb.Append('\n').Append("## Transcripción").Append('\n').Append('\n');
 
-        Speaker? speaker = null;
+        string? speaker = null;
         TimeSpan lastEnd = TimeSpan.Zero;
         var paragraph = new StringBuilder();
         void FlushParagraph()
@@ -31,11 +31,11 @@ public static class MarkdownExporter
 
         foreach (var s in segments.OrderBy(s => s.Start).ThenBy(s => s.Speaker))
         {
-            if (s.Speaker != speaker || s.Start - lastEnd > MaxGap)
+            if (s.Label != speaker || s.Start - lastEnd > MaxGap)
             {
                 FlushParagraph();
-                paragraph.Append($"**[{TimeFormat.Hms(s.Start)}] {s.Speaker}:** ");
-                speaker = s.Speaker;
+                paragraph.Append($"**[{TimeFormat.Hms(s.Start)}] {EscapeName(s.Label)}:** ");
+                speaker = s.Label;
             }
             else paragraph.Append(' ');
             paragraph.Append(Escape(s.Text.Trim()));
@@ -44,6 +44,8 @@ public static class MarkdownExporter
         FlushParagraph();
         return sb.ToString();
     }
+
+    private static string EscapeName(string name) => Escape(name);
 
     private static string Escape(string text)
     {

@@ -58,7 +58,7 @@ public sealed class MeetingTools(Func<ITranscriptStore> openStore, IAppControl a
         var hits = store.Search(query, Math.Clamp(limit, 1, 100));
         if (hits.Count == 0) return $"Sin resultados para «{query}».";
         return string.Join('\n', hits.Select(h =>
-            $"#{h.MeetingId} {h.MeetingTitle} [{TimeFormat.Hms(h.Segment.Start)}] [{h.Segment.Speaker}] {h.Snippet}"));
+            $"#{h.MeetingId} {h.MeetingTitle} [{TimeFormat.Hms(h.Segment.Start)}] [{h.Segment.Label}] {h.Snippet}"));
     }
 
     /// <summary>Segmentos nuevos desde un cursor; pensado para llamarse en bucle mientras dura la reunión.</summary>
@@ -73,7 +73,7 @@ public sealed class MeetingTools(Func<ITranscriptStore> openStore, IAppControl a
         if (meeting is null) return $"No existe la reunión #{id}.";
         var segs = store.GetSegmentsAfter(id.Value, Math.Max(0, sinceId));
         var sb = new StringBuilder();
-        foreach (var s in segs) sb.AppendLine($"[{TimeFormat.Hms(s.Segment.Start)}] [{s.Segment.Speaker}] {s.Segment.Text}");
+        foreach (var s in segs) sb.AppendLine($"[{TimeFormat.Hms(s.Segment.Start)}] [{s.Segment.Label}] {s.Segment.Text}");
         if (segs.Count == 0) sb.AppendLine("(sin texto nuevo)");
         var next = segs.Count > 0 ? segs[^1].Id : sinceId;
         var state = meeting.EndedAt is null ? "en curso" : "terminada";

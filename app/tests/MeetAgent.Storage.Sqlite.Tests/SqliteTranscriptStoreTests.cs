@@ -104,6 +104,53 @@ public class SqliteTranscriptStoreTests
     }
 
     [Fact]
+    public void Guarda_el_nombre_del_participante_y_lo_encuentra_en_la_busqueda()
+    {
+        using var store = NewStore();
+        var id = store.StartMeeting("Meet", T0, "transcribir");
+        store.AddSegment(id, new TranscriptSegment(Speaker.Otros, TimeSpan.Zero, TimeSpan.FromSeconds(2), "Revisemos el contrato", "Juan Pérez"));
+        store.AddSegment(id, S(Speaker.Yo, 3, "dale"));
+        var segs = store.GetSegments(id);
+        Assert.Equal("Juan Pérez", segs[0].SpeakerName);
+        Assert.Equal("Juan Pérez", segs[0].Label);
+        Assert.Null(segs[1].SpeakerName);
+        Assert.Equal("Juan Pérez", Assert.Single(store.Search("contrato")).Segment.SpeakerName);
+        Assert.Equal("Juan Pérez", store.GetSegmentsAfter(id, 0)[0].Segment.SpeakerName);
+    }
+
+    [Fact]
+    public void Migra_una_base_antigua_sin_la_columna_de_nombre()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"meetagent-old-{Guid.NewGuid():N}.db");
+        try
+        {
+            using (var c = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}"))
+            {
+                c.Open();
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = """
+                    CREATE TABLE meetings (id INTEGER PRIMARY KEY, title TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT, consent TEXT NOT NULL);
+                    CREATE TABLE segments (id INTEGER PRIMARY KEY, meeting_id INTEGER NOT NULL, speaker TEXT NOT NULL, start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL, text TEXT NOT NULL);
+                    INSERT INTO meetings VALUES (1, 'vieja', '2026-10-15T09:00:00.0000000-05:00', NULL, 'transcribir');
+                    INSERT INTO segments VALUES (1, 1, 'Yo', 0, 1000, 'hola');
+                    """;
+                cmd.ExecuteNonQuery();
+            }
+            using var store = new SqliteTranscriptStore($"Data Source={path}");
+            var old = Assert.Single(store.GetSegments(1));
+            Assert.Equal("hola", old.Text);
+            Assert.Null(old.SpeakerName);
+            store.AddSegment(1, new TranscriptSegment(Speaker.Otros, TimeSpan.Zero, TimeSpan.FromSeconds(1), "nuevo", "Ana"));
+            Assert.Equal("Ana", store.GetSegments(1)[1].SpeakerName);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Persiste_en_archivo_entre_aperturas()
     {
         var path = Path.Combine(Path.GetTempPath(), $"meetagent-test-{Guid.NewGuid():N}.db");

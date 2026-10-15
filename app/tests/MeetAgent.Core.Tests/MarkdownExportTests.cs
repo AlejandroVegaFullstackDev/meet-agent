@@ -37,6 +37,19 @@ public class MarkdownExportTests
     }
 
     [Fact]
+    public void Con_nombres_separa_participantes_aunque_todos_sean_Otros()
+    {
+        var md = MarkdownExporter.Export(M,
+        [
+            new(Speaker.Otros, TimeSpan.FromSeconds(0), TimeSpan.FromSeconds(2), "Hola.", "Juan Pérez"),
+            new(Speaker.Otros, TimeSpan.FromSeconds(2.5), TimeSpan.FromSeconds(4), "Buenas.", "Ana Gómez"),
+            new(Speaker.Otros, TimeSpan.FromSeconds(4.5), TimeSpan.FromSeconds(6), "Sigamos.", "Ana Gómez"),
+        ]);
+        Assert.Contains("**[00:00:00] Juan Pérez:** Hola.", md);
+        Assert.Contains("**[00:00:02] Ana Gómez:** Buenas. Sigamos.", md);
+    }
+
+    [Fact]
     public void Un_silencio_largo_abre_un_parrafo_nuevo_aunque_sea_el_mismo_hablante()
     {
         var md = MarkdownExporter.Export(M, [S(Speaker.Yo, 0, 3, "Uno."), S(Speaker.Yo, 30, 33, "Dos.")]);

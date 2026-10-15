@@ -63,7 +63,7 @@ public static class LiveCommand
         {
             transcript.Add(seg);
             if (meetingId is { } mid) store!.AddSegment(mid, seg);
-            Console.WriteLine($"[{TimeFormat.Hms(seg.Start)}] [{seg.Speaker}] {seg.Text}");
+            Console.WriteLine($"[{TimeFormat.Hms(seg.Start)}] [{seg.Label}] {seg.Text}");
         }
         var wall = monitor.Elapsed - pipelineStart;
         if (meetingId is { } done) store!.EndMeeting(done, DateTimeOffset.Now);
@@ -75,7 +75,7 @@ public static class LiveCommand
         var json = Path.Combine(Paths.Data, $"live-{Path.GetFileNameWithoutExtension(modelPath)}.json");
         await File.WriteAllTextAsync(json, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
         if (args.Get("out") is { } outPath)
-            await File.WriteAllLinesAsync(outPath, transcript.Select(s => $"[{TimeFormat.Hms(s.Start)}] [{s.Speaker}] {s.Text}"));
+            await File.WriteAllLinesAsync(outPath, transcript.Select(s => $"[{TimeFormat.Hms(s.Start)}] [{s.Label}] {s.Text}"));
         return 0;
     }
 

@@ -10,9 +10,9 @@ namespace MeetAgent.Desktop.ViewModels;
 /// <summary>Resultado de un inicio pedido por un agente: lo que eligió el usuario en el diálogo.</summary>
 public sealed record AgentStartResult(Consent Consent, long? MeetingId, bool AlreadyRunning);
 
-public sealed record TranscriptLine(string Time, Speaker Speaker, string Text)
+public sealed record TranscriptLine(string Time, Speaker Speaker, string Text, string? SpeakerName = null)
 {
-    public string SpeakerLabel => Speaker.ToString();
+    public string SpeakerLabel => string.IsNullOrWhiteSpace(SpeakerName) ? Speaker.ToString() : SpeakerName;
     public bool IsMe => Speaker == Speaker.Yo;
 }
 
@@ -39,7 +39,7 @@ public sealed partial class MainViewModel : ObservableObject
         TranscriberName = transcriberName;
         _session.SegmentReceived += seg => _ui(() =>
         {
-            Lines.Add(new TranscriptLine(TimeFormat.Hms(seg.Start), seg.Speaker, seg.Text));
+            Lines.Add(new TranscriptLine(TimeFormat.Hms(seg.Start), seg.Speaker, seg.Text, seg.SpeakerName));
             OnPropertyChanged(nameof(SegmentCount));
         });
         _session.Log += msg => _ui(() => LastLog = msg);
