@@ -4,3 +4,6 @@
 - **Logrado:** H0. Entorno anotado, .NET 10 verificado, dos modelos Whisper descargados, solución hexagonal creada en `app/`.
 - **Logrado:** Core con 38 pruebas en verde (troceo, WER, alineación, RMS, VAD por energía, WAV, conversión de PCM). Adaptadores de audio para Linux (probado) y Windows (compila). `capture` funciona; el loopback queda pendiente de prueba con sonido.
 - **Sigue:** H2 `live` y Desktop con transcriptor falso.
+- **Logrado:** H2: `live` con 2 canales, un modelo y VAD. small 5/1: RAM 752 MB, CPU 21 %, latencia p50 1,4 s. Medium no sostiene el tiempo real. `audio_ctx` reducido hace al encoder 4,7× más rápido. Alineación del solape por tiempo y por texto. 60 pruebas en verde.
+- **Logrado:** H3: `bench` con WER S/D/I por modelo y modo; resultados preliminares con voz sintética.
+- **Sigue:** Desktop (Avalonia) y H4 (SQLite + FTS5 + export). Pendiente de Alejandro: aceptación de H1 con sonido y cambio a audífonos, referencia real de 5 min para H3, y decisión sobre el VAD Silero.

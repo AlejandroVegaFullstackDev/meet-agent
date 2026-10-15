@@ -111,6 +111,24 @@ public class OverlapMergerTests
         Assert.Equal("de nuevo", m.Add("de nuevo"));
     }
 
+    [Theory]
+    [InlineData("en windows tonaria", "tomaría falta probarlo", "falta probarlo")]
+    [InlineData("y decí", "decir cuál modelo", "cuál modelo")]
+    public void Reconoce_la_misma_palabra_mal_escrita_en_la_frontera(string prev, string next, string expected)
+    {
+        var m = new OverlapMerger();
+        m.Add(prev);
+        Assert.Equal(expected, m.Add(next));
+    }
+
+    [Fact]
+    public void No_confunde_palabras_distintas_parecidas_solo_en_longitud()
+    {
+        var m = new OverlapMerger();
+        m.Add("revisamos la casa");
+        Assert.Equal("cosa nueva", m.Add("cosa nueva"));     // casa/cosa: 1 letra de 4, pero cortas
+    }
+
     [Fact]
     public void Reset_olvida_el_contexto()
     {
