@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# MeetAgent: instalador para Linux (sin sudo). Copia el conector y el MCP a ~/.local/share/MeetAgent/bin
-# y los registra para la extensión en Firefox (también el de snap), Chrome, Chromium y Edge.
+# MeetAgent: instalador para Linux y macOS (sin sudo). Copia el conector y el MCP a ~/.local/share/MeetAgent/bin
+# y los registra para la extensión en Firefox, Chrome, Chromium, Edge y Brave.
 # Desinstalar: ./install.sh --remove
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -8,8 +8,20 @@ APP="$HOME/.local/share/MeetAgent"
 NAME=com.meetagent.host
 GECKO_ID=meetagent@alejandrovega.dev
 CHROMIUM_IDS="$(cat "$HERE/chromium-ids.txt")"
-CHROMIUM_DIRS=("$HOME/.config/google-chrome/NativeMessagingHosts" "$HOME/.config/chromium/NativeMessagingHosts" "$HOME/.config/microsoft-edge/NativeMessagingHosts")
-FIREFOX_DIRS=("$HOME/.mozilla/native-messaging-hosts" "$HOME/snap/firefox/common/.mozilla/native-messaging-hosts")
+
+if [ "$(uname -s)" = "Darwin" ]; then
+  CHROMIUM_DIRS=("$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts" \
+                 "$HOME/Library/Application Support/Chromium/NativeMessagingHosts" \
+                 "$HOME/Library/Application Support/Microsoft Edge/NativeMessagingHosts" \
+                 "$HOME/Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts")
+  FIREFOX_DIRS=("$HOME/Library/Application Support/Mozilla/NativeMessagingHosts")
+  DIR_ESTANDAR="$HOME/Library/Application Support/Mozilla/NativeMessagingHosts"
+else
+  CHROMIUM_DIRS=("$HOME/.config/google-chrome/NativeMessagingHosts" "$HOME/.config/chromium/NativeMessagingHosts" \
+                 "$HOME/.config/microsoft-edge/NativeMessagingHosts" "$HOME/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts")
+  FIREFOX_DIRS=("$HOME/.mozilla/native-messaging-hosts" "$HOME/snap/firefox/common/.mozilla/native-messaging-hosts")
+  DIR_ESTANDAR="$HOME/.mozilla/native-messaging-hosts"
+fi
 
 if [ "${1:-}" = "--remove" ]; then
   for d in "${CHROMIUM_DIRS[@]}" "${FIREFOX_DIRS[@]}"; do rm -f "$d/$NAME.json"; done
@@ -27,7 +39,7 @@ for d in "${CHROMIUM_DIRS[@]}"; do
   printf '{ "name": "%s", "description": "MeetAgent", "path": "%s", "type": "stdio", "allowed_origins": [%s] }\n' "$NAME" "$HOST" "$origins" > "$d/$NAME.json"
 done
 for d in "${FIREFOX_DIRS[@]}"; do
-  [ "$d" = "$HOME/.mozilla/native-messaging-hosts" ] || [ -d "$(dirname "$d")" ] || continue
+  [ "$d" = "$DIR_ESTANDAR" ] || [ -d "$(dirname "$d")" ] || continue
   mkdir -p "$d"
   printf '{ "name": "%s", "description": "MeetAgent", "path": "%s", "type": "stdio", "allowed_extensions": ["%s"] }\n' "$NAME" "$HOST" "$GECKO_ID" > "$d/$NAME.json"
 done

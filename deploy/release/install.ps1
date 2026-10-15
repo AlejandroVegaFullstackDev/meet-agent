@@ -1,5 +1,5 @@
 # MeetAgent: instalador para Windows (sin administrador). Copia el conector y el MCP a
-# %LOCALAPPDATA%\MeetAgent\bin y los registra (HKCU) para la extensión en Chrome, Edge y Firefox.
+# %LOCALAPPDATA%\MeetAgent\bin y los registra (HKCU) para la extensión en Chrome, Edge, Brave y Firefox.
 # Uso:  powershell -ExecutionPolicy Bypass -File install.ps1     ·  Desinstalar: ... -File install.ps1 -Remove
 param([switch]$Remove)
 $ErrorActionPreference = 'Stop'
@@ -12,6 +12,7 @@ $ChromiumIds = (Get-Content (Join-Path $Here 'chromium-ids.txt') -Raw).Trim() -s
 $Keys = @{
   'HKCU:\Software\Google\Chrome\NativeMessagingHosts'    = 'chromium'
   'HKCU:\Software\Microsoft\Edge\NativeMessagingHosts'   = 'chromium'
+  'HKCU:\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts' = 'chromium'
   'HKCU:\Software\Mozilla\NativeMessagingHosts'          = 'firefox'
 }
 

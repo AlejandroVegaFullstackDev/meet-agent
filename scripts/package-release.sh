@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Arma los paquetes para repartir MeetAgent (modo extensión, sin app de escritorio):
 #   dist/release/meetagent-extension-<v>.zip     → para la tienda (Chrome Web Store / AMO) o cargar a mano
-#   dist/release/meetagent-windows-x64-<v>.zip   → conector + MCP + extensión + install.ps1 + LEEME.md
+#   dist/release/meetagent-win-x64-<v>.zip       → conector + MCP + extensión + install.ps1 + LEEME.md
 #   dist/release/meetagent-linux-x64-<v>.tar.gz  → conector + MCP + extensión + install.sh + LEEME.md
+#   dist/release/meetagent-macos-arm64-<v>.tar.gz  (y -x64)  → igual, para macOS
 set -euo pipefail
 cd "$(dirname "$0")/.."
 DOTNET="$HOME/.dotnet/dotnet"; [ -x "$DOTNET" ] || DOTNET="$(command -v dotnet)"
@@ -23,8 +24,9 @@ with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
         else: z.write(p, f)
 PY
 
-for rid in win-x64 linux-x64; do
-  pkg="$OUT/meetagent-$rid-$VERSION"; mkdir -p "$pkg/bin" "$pkg/extension"
+for rid in win-x64 linux-x64 osx-arm64 osx-x64; do
+  case "$rid" in osx-arm64) name=macos-arm64 ;; osx-x64) name=macos-x64 ;; *) name="$rid" ;; esac
+  pkg="$OUT/meetagent-$name-$VERSION"; mkdir -p "$pkg/bin" "$pkg/extension"
   for proj in MeetAgent.NativeHost MeetAgent.Mcp; do
     "$DOTNET" publish "app/src/$proj" -c Release -r "$rid" --self-contained true -p:PublishSingleFile=true \
       -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o "$pkg/bin" --nologo -v quiet
@@ -35,10 +37,10 @@ for rid in win-x64 linux-x64; do
   cp deploy/extension/chromium-id.txt "$pkg/chromium-ids.txt"   # agregar aquí el ID de la tienda cuando se publique
   if [ "$rid" = win-x64 ]; then
     cp deploy/release/install.ps1 "$pkg/"
-    (cd "$OUT" && python3 -c "import shutil,sys; shutil.make_archive(sys.argv[1], 'zip', '.', sys.argv[1])" "meetagent-$rid-$VERSION")
+    (cd "$OUT" && python3 -c "import shutil,sys; shutil.make_archive(sys.argv[1], 'zip', '.', sys.argv[1])" "meetagent-$name-$VERSION")
   else
     cp deploy/release/install.sh "$pkg/"
-    tar -czf "$pkg.tar.gz" -C "$OUT" "meetagent-$rid-$VERSION"
+    tar -czf "$pkg.tar.gz" -C "$OUT" "meetagent-$name-$VERSION"
   fi
   rm -rf "$pkg"
 done

@@ -1,22 +1,37 @@
 #!/usr/bin/env bash
-# Registra meetagent-host (native messaging) para la extensión de Meet en Firefox, Edge, Chrome y Chromium.
-# Solo escribe un JSON por navegador en la carpeta de tu usuario; no necesita sudo ni abre puertos.
+# Registra meetagent-host (native messaging) para la extensión de Meet en Firefox, Edge, Chrome, Chromium y Brave,
+# en Linux (también el Firefox de snap) y macOS. Solo escribe un JSON por navegador en la carpeta de tu usuario;
+# no necesita sudo ni abre puertos.
 # Uso: scripts/install-extension-host.sh     ·  Desinstalar: scripts/install-extension-host.sh --remove
 set -euo pipefail
 cd "$(dirname "$0")/.."
 NAME=com.meetagent.host
-HOST_BIN="$PWD/dist/linux-x64/meetagent-host"
-CHROMIUM_ID=$(cat deploy/extension/chromium-id.txt)
 GECKO_ID=meetagent@alejandrovega.dev
-DIRS_CHROMIUM=("$HOME/.config/google-chrome/NativeMessagingHosts" "$HOME/.config/chromium/NativeMessagingHosts" "$HOME/.config/microsoft-edge/NativeMessagingHosts")
-DIRS_FIREFOX=("$HOME/.mozilla/native-messaging-hosts" "$HOME/snap/firefox/common/.mozilla/native-messaging-hosts")
+CHROMIUM_ID=$(cat deploy/extension/chromium-id.txt)
+
+if [ "$(uname -s)" = "Darwin" ]; then
+  case "$(uname -m)" in arm64) RID=osx-arm64 ;; *) RID=osx-x64 ;; esac
+  DIRS_CHROMIUM=("$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts" \
+                 "$HOME/Library/Application Support/Chromium/NativeMessagingHosts" \
+                 "$HOME/Library/Application Support/Microsoft Edge/NativeMessagingHosts" \
+                 "$HOME/Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts")
+  DIRS_FIREFOX=("$HOME/Library/Application Support/Mozilla/NativeMessagingHosts")
+  DIR_ESTANDAR="$HOME/Library/Application Support/Mozilla/NativeMessagingHosts"
+else
+  RID=linux-x64
+  DIRS_CHROMIUM=("$HOME/.config/google-chrome/NativeMessagingHosts" "$HOME/.config/chromium/NativeMessagingHosts" \
+                 "$HOME/.config/microsoft-edge/NativeMessagingHosts" "$HOME/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts")
+  DIRS_FIREFOX=("$HOME/.mozilla/native-messaging-hosts" "$HOME/snap/firefox/common/.mozilla/native-messaging-hosts")
+  DIR_ESTANDAR="$HOME/.mozilla/native-messaging-hosts"
+fi
+HOST_BIN="$PWD/dist/$RID/meetagent-host"
 
 if [ "${1:-}" = "--remove" ]; then
   for d in "${DIRS_CHROMIUM[@]}" "${DIRS_FIREFOX[@]}"; do rm -f "$d/$NAME.json"; done
   echo "Host de MeetAgent desregistrado."; exit 0
 fi
 
-[ -x "$HOST_BIN" ] || { echo "Falta $HOST_BIN: corre primero scripts/publish.sh linux-x64"; exit 1; }
+[ -x "$HOST_BIN" ] || { echo "Falta $HOST_BIN: corre primero scripts/publish.sh $RID"; exit 1; }
 for d in "${DIRS_CHROMIUM[@]}"; do
   [ -d "$(dirname "$d")" ] || continue          # solo navegadores que existen
   mkdir -p "$d"
@@ -28,7 +43,7 @@ JSON
 done
 for d in "${DIRS_FIREFOX[@]}"; do
   # La ruta estándar siempre: el Firefox de snap lanza el host por el portal del sistema, que la busca ahí.
-  [ "$d" = "$HOME/.mozilla/native-messaging-hosts" ] || [ -d "$(dirname "$d")" ] || continue
+  [ "$d" = "$DIR_ESTANDAR" ] || [ -d "$(dirname "$d")" ] || continue
   mkdir -p "$d"
   cat > "$d/$NAME.json" <<JSON
 { "name": "$NAME", "description": "MeetAgent: guarda los subtítulos de Meet en tu equipo", "path": "$HOST_BIN",

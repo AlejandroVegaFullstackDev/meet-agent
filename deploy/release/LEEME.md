@@ -5,9 +5,11 @@ Lee los **subtítulos de Google Meet** (con el nombre de cada persona) y los gua
 ## Instalar (2 pasos)
 1. **Conector** (sin permisos de administrador):
    - Windows: clic derecho en `install.ps1` → *Ejecutar con PowerShell*, o bien `powershell -ExecutionPolicy Bypass -File install.ps1`
-   - Linux: `./install.sh`
+   - Linux y macOS: `./install.sh`
+   - macOS: si al abrir un Meet el conector no arranca, quítale la cuarentena al binario descargado:
+     `xattr -d com.apple.quarantine ~/.local/share/MeetAgent/bin/meetagent-host`
 2. **Extensión** (carpeta `extension/` o `meetagent-extension.zip`):
-   - Chrome/Edge: `chrome://extensions` o `edge://extensions` → *Modo de desarrollador* → *Cargar descomprimida* → carpeta `extension/`.
+   - Chrome/Edge/Brave: `chrome://extensions`, `edge://extensions` o `brave://extensions` → *Modo de desarrollador* → *Cargar descomprimida* → carpeta `extension/`.
    - Firefox: `about:debugging#/runtime/this-firefox` → *Cargar complemento temporal* → `extension/manifest.json`.
    (Cuando la empresa la publique en privado, se instala desde la tienda con un clic o la instala el administrador).
 

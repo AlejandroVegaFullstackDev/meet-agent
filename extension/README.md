@@ -1,4 +1,4 @@
-# Extensión MeetAgent (Chrome · Edge · Firefox)
+# Extensión MeetAgent (Chrome · Edge · Brave · Firefox)
 
 Lee los **subtítulos de Google Meet** (con el nombre de cada persona) en la pestaña donde ya estás y los guarda en MeetAgent, en tu equipo. **Sin modelo de IA local, sin Docker y sin bot.** Las notas, resúmenes y preguntas las hace tu IA (Claude, DeepSeek, Gemini…) por el MCP (`meetagent-mcp`).
 
@@ -9,11 +9,12 @@ Meet (subtítulos) → extensión → native messaging → meetagent-host → SQ
 ## Instalar
 1. Genera el host y regístralo (solo escribe un JSON por navegador en tu carpeta de usuario, sin sudo):
    ```bash
-   scripts/publish.sh linux-x64
+   scripts/publish.sh linux-x64   # en macOS: scripts/publish.sh osx-arm64 (o osx-x64 en Mac Intel)
    scripts/install-extension-host.sh
    ```
+   El script detecta Linux o macOS y registra el host en Firefox, Chrome, Chromium, Edge y Brave.
 2. Carga la extensión (carpeta `extension/`):
-   - **Edge / Chrome / Chromium:** `edge://extensions` (o `chrome://extensions`) → activa *Modo de desarrollador* → *Cargar descomprimida* → elige `extension/`.
+   - **Edge / Chrome / Chromium / Brave:** `edge://extensions` (o `chrome://extensions`, `brave://extensions`) → activa *Modo de desarrollador* → *Cargar descomprimida* → elige `extension/`.
    - **Firefox (incluido el de snap de Ubuntu):** abre `about:debugging#/runtime/this-firefox` → *Cargar complemento temporal…* → elige `extension/manifest.json`.
      - La primera vez que pulses *Transcribir*, Ubuntu pregunta si Firefox puede abrir **MeetAgent** (portal del sistema): acepta.
      - Si dice que no encuentra MeetAgent: en `about:config` pon `widget.use-xdg-desktop-portal.native-messaging` = `1` y reinicia Firefox.
