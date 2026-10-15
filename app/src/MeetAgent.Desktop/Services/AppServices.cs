@@ -48,9 +48,9 @@ public sealed class AppServices : IAsyncDisposable
         else if (!File.Exists(modelPath)) transcriber = new FakeTranscriber(reason: $"no está {modelPath}");
         else
         {
-            // Si falta la librería nativa o el modelo está dañado, la app arranca igual y lo muestra.
-            try { transcriber = new WhisperTranscriber(modelPath, WhisperTranscriber.DefaultThreads, audioContextSeconds: 6); }
-            catch (Exception ex) { transcriber = new FakeTranscriber(reason: $"Whisper no cargó: {ex.Message}"); }
+            // Whisper se carga recién al empezar una reunión local (no al abrir la app).
+            transcriber = new LazyTranscriber(modelName,
+                () => new WhisperTranscriber(modelPath, WhisperTranscriber.DefaultThreads, audioContextSeconds: 6));
         }
 
         var store = new SqliteTranscriptStore($"Data Source={AppPaths.Database}");
