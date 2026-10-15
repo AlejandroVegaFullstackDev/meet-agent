@@ -37,7 +37,8 @@ public sealed class App : Application
             _window = new MainWindow();
             _vm = new MainViewModel(_services.Session, _services.Transcriber.Name,
                 askConsent: () => ConsentDialog.AskAsync(ShowWindow()),
-                ui: a => Dispatcher.UIThread.Post(a));
+                ui: a => Dispatcher.UIThread.Post(a),
+                botFactory: _services.BotFactory);
             _window.DataContext = _vm;
             _vm.PropertyChanged += OnVmChanged;
             _idleIcon = LoadIcon("idle.png");

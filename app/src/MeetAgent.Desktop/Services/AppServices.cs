@@ -4,6 +4,7 @@ using MeetAgent.Core;
 using MeetAgent.Core.Audio;
 using MeetAgent.Core.Pipeline;
 using MeetAgent.Core.Ports;
+using MeetAgent.Meet.Vexa;
 using MeetAgent.Storage.Sqlite;
 using MeetAgent.Stt.Whisper;
 
@@ -12,8 +13,9 @@ namespace MeetAgent.Desktop.Services;
 /// <summary>Composición de la app: elige adaptadores por SO y transcriptor (Whisper o falso).</summary>
 public sealed class AppServices : IAsyncDisposable
 {
-    private AppServices(ITranscriber transcriber, ITranscriptStore store, MeetingSession session)
+    private AppServices(ITranscriber transcriber, ITranscriptStore store, MeetingSession session, Func<BotMeetingSession>? botFactory)
     {
+        BotFactory = botFactory;
         Transcriber = transcriber;
         Store = store;
         Session = session;
@@ -22,6 +24,9 @@ public sealed class AppServices : IAsyncDisposable
     public ITranscriber Transcriber { get; }
     public ITranscriptStore Store { get; }
     public MeetingSession Session { get; }
+
+    /// <summary>Sesión del bot de Meet si Vexa está levantado (deploy/vexa/up.sh); null si no.</summary>
+    public Func<BotMeetingSession>? BotFactory { get; }
 
     public static string Root => AppPaths.Root;
     public static string DataDir => AppPaths.Data;
@@ -51,7 +56,9 @@ public sealed class AppServices : IAsyncDisposable
         var store = new SqliteTranscriptStore($"Data Source={AppPaths.Database}");
         var recordings = new WavRecordingSinkFactory(Path.Combine(DataDir, "recordings"));
         var session = new MeetingSession(sources, transcriber, new EnergyVad(), store, recordings);
-        return new AppServices(transcriber, store, session);
+        var vexa = VexaConfig.Load(AppPaths.Root);
+        Func<BotMeetingSession>? bot = vexa is null ? null : () => new BotMeetingSession(vexa.CreateClient(), store);
+        return new AppServices(transcriber, store, session, bot);
     }
 
     private static string? ArgValue(string[] args, string key)

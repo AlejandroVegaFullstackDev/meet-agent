@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using MeetAgent.Core;
 using MeetAgent.Core.Pipeline;
 using MeetAgent.Core.Text;
+using MeetAgent.Meet.Vexa;
 
 namespace MeetAgent.Desktop.ViewModels;
 
@@ -26,24 +27,30 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly Func<Task<Consent>> _askConsent;
     private readonly Action<Action> _ui;
     private readonly Func<DateTimeOffset> _now;
+    private readonly Func<BotMeetingSession>? _botFactory;
+    private BotMeetingSession? _bot;
     private Timer? _clock;
     private DateTimeOffset _startedAt;
 
+    /// <param name="botFactory">Crea la sesión del bot de Meet (Vexa); null si Vexa no está configurado.</param>
     public MainViewModel(MeetingSession session, string transcriberName, Func<Task<Consent>> askConsent,
-        Action<Action>? ui = null, Func<DateTimeOffset>? now = null)
+        Action<Action>? ui = null, Func<DateTimeOffset>? now = null, Func<BotMeetingSession>? botFactory = null)
     {
         _session = session;
+        _botFactory = botFactory;
         _askConsent = askConsent;
         _ui = ui ?? (a => a());
         _now = now ?? (() => DateTimeOffset.Now);
         TranscriberName = transcriberName;
-        _session.SegmentReceived += seg => _ui(() =>
-        {
-            Lines.Add(new TranscriptLine(TimeFormat.Hms(seg.Start), seg.Speaker, seg.Text, seg.SpeakerName));
-            OnPropertyChanged(nameof(SegmentCount));
-        });
+        _session.SegmentReceived += OnSegment;
         _session.Log += msg => _ui(() => LastLog = msg);
     }
+
+    private void OnSegment(TranscriptSegment seg) => _ui(() =>
+    {
+        Lines.Add(new TranscriptLine(TimeFormat.Hms(seg.Start), seg.Speaker, seg.Text, seg.SpeakerName));
+        OnPropertyChanged(nameof(SegmentCount));
+    });
 
     public ObservableCollection<TranscriptLine> Lines { get; } = new();
     public string TranscriberName { get; }
@@ -55,8 +62,20 @@ public sealed partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ButtonText), nameof(StatusText))]
-    [NotifyCanExecuteChangedFor(nameof(ToggleCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ToggleCommand), nameof(JoinBotCommand))]
     private bool _isBusy;
+
+    /// <summary>Bot de Meet en la reunión (excluye la captura local y viceversa).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText), nameof(DiskText))]
+    [NotifyCanExecuteChangedFor(nameof(ToggleCommand), nameof(JoinBotCommand), nameof(LeaveBotCommand))]
+    private bool _isBotRunning;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(JoinBotCommand))]
+    private string _meetLink = "";
+
+    public bool CanUseBot => _botFactory is not null;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusText), nameof(DiskText))]
@@ -67,13 +86,76 @@ public sealed partial class MainViewModel : ObservableObject
 
     public string ButtonText => IsBusy ? (IsRunning ? "Terminando…" : "Preparando…") : IsRunning ? "Terminar" : "Empezar";
 
-    public string StatusText => IsRunning
+    public string StatusText => IsBotRunning ? "En vivo · bot en el Meet"
+        : IsRunning
         ? Consent == Consent.RecordAndTranscribe ? "En vivo · grabando y transcribiendo" : "En vivo · solo transcribiendo"
         : "Detenido";
 
-    public string DiskText => Consent == Consent.RecordAndTranscribe ? "Audio: se guarda en data/" : "Audio: no se guarda";
+    public string DiskText => IsBotRunning ? "Audio: no se guarda (el bot solo transcribe)"
+        : Consent == Consent.RecordAndTranscribe ? "Audio: se guarda en data/" : "Audio: no se guarda";
 
-    private bool CanToggle() => !IsBusy;
+    private bool CanToggle() => !IsBusy && !IsBotRunning;
+
+    private bool CanJoinBot() => CanUseBot && !IsBusy && !IsRunning && !IsBotRunning && MeetLink.Trim().Length > 0;
+
+    /// <summary>
+    /// Envía el bot al Meet. Pegar el link y pulsar «Unir bot» es el consentimiento explícito;
+    /// además el bot es visible para todos en la reunión y no graba audio (solo transcribe).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanJoinBot))]
+    private async Task JoinBotAsync()
+    {
+        if (!MeetLink_IsValid(out var code))
+        {
+            LastLog = "Eso no parece un link de Google Meet (meet.google.com/abc-defg-hij).";
+            return;
+        }
+        IsBusy = true;
+        try
+        {
+            var bot = _botFactory!();
+            bot.SegmentReceived += OnSegment;
+            bot.Log += msg => _ui(() => LastLog = msg);
+            Lines.Clear();
+            OnPropertyChanged(nameof(SegmentCount));
+            var id = await bot.StartAsync(code, $"Meet {_now():yyyy-MM-dd HH:mm}", CancellationToken.None);
+            _bot = bot;
+            IsBotRunning = true;
+            _startedAt = _now();
+            _clock = new Timer(_ => _ui(() => Elapsed = TimeFormat.Hms(_now() - _startedAt)), null, 0, 1000);
+            LastLog = $"Reunión #{id}: bot pedido. Admítelo en el Meet.";
+            _ = bot.Completion.ContinueWith(_ => _ui(OnBotEnded), TaskScheduler.Default);
+        }
+        catch (Exception ex)
+        {
+            LastLog = $"No se pudo enviar el bot: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private bool MeetLink_IsValid(out string code) => MeetAgent.Meet.Vexa.MeetLink.TryParse(MeetLink, out code);
+
+    [RelayCommand(CanExecute = nameof(IsBotRunning))]
+    private async Task LeaveBotAsync()
+    {
+        if (_bot is null) return;
+        LastLog = "Sacando al bot…";
+        await _bot.StopAsync();
+        OnBotEnded();
+    }
+
+    private void OnBotEnded()
+    {
+        if (!IsBotRunning) return;
+        _clock?.Dispose();
+        _clock = null;
+        IsBotRunning = false;
+        _bot = null;
+        LastLog = $"Reunión del bot guardada · {SegmentCount} segmentos";
+    }
 
     [RelayCommand(CanExecute = nameof(CanToggle))]
     private async Task ToggleAsync()
