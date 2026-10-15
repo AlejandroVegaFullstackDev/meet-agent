@@ -6,7 +6,7 @@ namespace MeetAgent.Desktop.Services;
 /// Transcriptor falso para desarrollar la UI sin cargar Whisper: devuelve frases de ejemplo
 /// en orden, con una demora parecida a la de small en este equipo.
 /// </summary>
-public sealed class FakeTranscriber(TimeSpan? delay = null) : ITranscriber
+public sealed class FakeTranscriber(TimeSpan? delay = null, string? reason = null) : ITranscriber
 {
     private static readonly string[] Lines =
     [
@@ -21,7 +21,7 @@ public sealed class FakeTranscriber(TimeSpan? delay = null) : ITranscriber
 
     private int _next;
 
-    public string Name => "falso (sin Whisper)";
+    public string Name => reason is null ? "falso (sin Whisper)" : $"falso — {reason}";
 
     public async Task<IReadOnlyList<RecognizedText>> TranscribeAsync(float[] samples, CancellationToken ct)
     {

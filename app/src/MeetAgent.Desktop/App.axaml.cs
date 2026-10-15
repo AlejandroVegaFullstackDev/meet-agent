@@ -30,6 +30,7 @@ public sealed class App : Application
             // La app vive en la bandeja: cerrar la ventana no la termina; "Salir" sí.
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             _services = AppServices.Create(Program.Args);
+            Console.Error.WriteLine($"MeetAgent · transcriptor: {_services.Transcriber.Name} · datos: {AppServices.DataDir}");
             _window = new MainWindow();
             _vm = new MainViewModel(_services.Session, _services.Transcriber.Name,
                 askConsent: () => ConsentDialog.AskAsync(ShowWindow()),

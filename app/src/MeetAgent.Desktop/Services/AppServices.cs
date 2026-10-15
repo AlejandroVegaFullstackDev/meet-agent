@@ -37,9 +37,15 @@ public sealed class AppServices : IAsyncDisposable
 
         var modelName = ArgValue(args, "--model") ?? "small-q5_1";
         var modelPath = Path.Combine(Root, "models", $"ggml-{modelName}.bin");
-        ITranscriber transcriber = args.Contains("--fake") || !File.Exists(modelPath)
-            ? new FakeTranscriber()
-            : new WhisperTranscriber(modelPath, WhisperTranscriber.DefaultThreads, audioContextSeconds: 6);
+        ITranscriber transcriber;
+        if (args.Contains("--fake")) transcriber = new FakeTranscriber();
+        else if (!File.Exists(modelPath)) transcriber = new FakeTranscriber(reason: $"no está {modelPath}");
+        else
+        {
+            // Si falta la librería nativa o el modelo está dañado, la app arranca igual y lo muestra.
+            try { transcriber = new WhisperTranscriber(modelPath, WhisperTranscriber.DefaultThreads, audioContextSeconds: 6); }
+            catch (Exception ex) { transcriber = new FakeTranscriber(reason: $"Whisper no cargó: {ex.Message}"); }
+        }
 
         var store = new SqliteTranscriptStore($"Data Source={Path.Combine(DataDir, "meetagent.db")}");
         var recordings = new WavRecordingSinkFactory(Path.Combine(DataDir, "recordings"));

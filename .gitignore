@@ -11,3 +11,5 @@ obj/
 *.user
 .vs/
 TestResults/
+# Ejecutables publicados
+dist/

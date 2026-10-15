@@ -22,3 +22,9 @@ Ejecutar: `~/.dotnet/dotnet run --project app/src/MeetAgent.Desktop [-- --fake] 
 ## Sigue
 - Probarla con Alejandro con audio real (Whisper small en vivo).
 - Verificar la bandeja en Windows.
+
+## Ejecutables (2026-10-15)
+`scripts/publish.sh` genera `dist/linux-x64/MeetAgent` (101 MB) y `dist/win-x64/MeetAgent.exe` (105 MB), autónomos y sin necesidad de .NET instalado. `dist/` no se versiona.
+- Bug encontrado: al incrustar las nativas en el archivo único, Whisper.net no encontraba `libwhisper` y la app se caía al iniciar. Ahora las nativas van en `runtimes/<rid>/` junto al ejecutable. Además, si Whisper no carga, la app arranca con el transcriptor falso y muestra el motivo.
+- Linux: probado; carga small-q5_1 real y queda en la bandeja.
+- Windows: generado desde Linux, sin probar.
