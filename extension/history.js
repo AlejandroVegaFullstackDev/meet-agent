@@ -19,7 +19,12 @@
 
   async function loadList() {
     const r = await native({ type: 'list' });
-    if (!r.ok) { $('st').textContent = `No encuentro MeetAgent en este equipo: ${r.error}`; return; }
+    if (!r.ok) {
+      $('st').textContent = 'Sin conexión con MeetAgent';
+      const box = $('transcript'); box.textContent = '';
+      box.append(el('p', 'empty err', `No pude leer tus reuniones: ${r.error}. ¿Instalaste el conector (install.sh / install.ps1)?`));
+      return;
+    }
     meetings = r.meetings;
     $('st').textContent = `${meetings.length} reuniones`;
     const ul = $('meetings'); ul.textContent = '';
@@ -91,6 +96,17 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     $('msg').textContent = `Descargado ${r.filename}`;
   };
+
+  // Diagnóstico abierto desde el panel del Meet (history.html#diag)
+  if (location.hash === '#diag') {
+    $('diag').classList.add('on');
+    const ask = globalThis.browser?.runtime?.sendMessage
+      ? browser.runtime.sendMessage({ cmd: 'get-diag' })
+      : new Promise((res) => chrome.runtime.sendMessage({ cmd: 'get-diag' }, res));
+    ask.then((r) => { $('diagText').textContent = r?.text || '(sin datos)'; });
+    $('copyDiag').onclick = () => navigator.clipboard.writeText($('diagText').textContent);
+    $('closeDiag').onclick = () => { $('diag').classList.remove('on'); history.replaceState(null, '', location.pathname); };
+  }
 
   loadList();
 })();

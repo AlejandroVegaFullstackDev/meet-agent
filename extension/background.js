@@ -2,7 +2,8 @@
 // Un puerto nativo por pestaña; el host responde en orden, así que las respuestas se emparejan en cola.
 const api = globalThis.browser ?? globalThis.chrome;
 const HOST = 'com.meetagent.host';
-const ports = new Map(); // tabId → { port, waiting: [] }
+const ports = new Map(); // pestaña o página de la extensión → { port, waiting: [] }
+let lastDiag = '';
 
 function nativeFor(tabId) {
   let entry = ports.get(tabId);
@@ -24,8 +25,16 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     api.tabs.create({ url: api.runtime.getURL('history.html') });
     return false;
   }
-  if (msg?.cmd !== 'native' || !sender.tab) return false;
-  const entry = nativeFor(sender.tab.id);
+  // Diagnóstico: se muestra en una página de la extensión (local), no en un archivo.
+  if (msg?.cmd === 'open-diag') {
+    lastDiag = msg.text || '';
+    api.tabs.create({ url: api.runtime.getURL('history.html#diag') });
+    return false;
+  }
+  if (msg?.cmd === 'get-diag') { sendResponse({ ok: true, text: lastDiag }); return false; }
+  if (msg?.cmd !== 'native') return false;
+  // La página de historial también habla con el conector (no solo la pestaña de Meet).
+  const entry = nativeFor(sender.tab?.id ?? `page:${sender.url}`);
   new Promise((resolve) => {
     entry.waiting.push({ resolve });
     try { entry.port.postMessage(msg.payload); }

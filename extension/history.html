@@ -46,11 +46,21 @@
     .me .who { background:var(--me-bg); color:var(--me); }
     .empty { color:var(--muted); text-align:center; margin-top:18vh; }
     .msg { color:var(--muted); font-size:12px; margin-top:8px; min-height:16px; }
+    .diag { display:none; margin:16px 20px; }
+    .diag.on { display:block; }
+    .diag pre { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; overflow:auto; max-height:60vh; font-size:12px; }
+    .err { color:#dc2626; }
     @media (max-width: 760px) { main { grid-template-columns:1fr; height:auto; } .list { max-height:40vh; } }
   </style>
 </head>
 <body>
   <header><img src="icons/icon-48.png" alt=""><h1>MeetAgent · Historial</h1><span class="st" id="st"></span></header>
+  <section class="diag" id="diag">
+    <h2>Diagnóstico de subtítulos</h2>
+    <p class="m">Estructura de la página de Meet (etiquetas y tamaños, sin lo que dice la gente). Sirve para ajustar la extensión si Meet cambia.</p>
+    <p><button id="copyDiag">Copiar</button> <button id="closeDiag">Cerrar</button></p>
+    <pre id="diagText"></pre>
+  </section>
   <main>
     <section class="left">
       <form id="search"><input type="search" id="q" placeholder='Buscar en todas (prefijo*, "frase")'><button>Buscar</button></form>

@@ -63,9 +63,10 @@
     $('.stop').onclick = () => stop('Detenido.');
     $('.notice').onclick = postNotice;
     $('.hist').onclick = () => { try { (globalThis.browser ?? chrome).runtime.sendMessage({ cmd: 'open-history' }); } catch (e) { $('.s').textContent = String(e); } };
-    $('.diag').onclick = async () => {
-      const r = await native({ type: 'diag', text: S.diagnose() });
-      $('.s').textContent = r.ok ? 'Diagnóstico guardado en MeetAgent (data/extension-diag.txt).' : `No se pudo: ${r.error}`;
+    $('.diag').onclick = () => {
+      const text = S.diagnose();
+      native({ type: 'diag', text });   // copia local para soporte (data/extension-diag.txt)
+      try { (globalThis.browser ?? chrome).runtime.sendMessage({ cmd: 'open-diag', text }); } catch (e) { $('.s').textContent = String(e); }
     };
     $('.min').onclick = () => { $('.p').style.display = 'none'; host.title = 'MeetAgent'; };
     let collapsed = false;
@@ -119,14 +120,15 @@
     ui.status(`Reunión #${r.meetingId} · esperando subtítulos…`);
   }
 
-  function ensureCaptions() {
-    if (S.captionRegion()) return;
-    const b = S.captionsButton();
-    if (b) b.click();
+  // Activa los subtítulos de Meet («Turn on captions» / «Activar subtítulos»); reintenta unas veces.
+  function ensureCaptions(attempt = 1) {
+    if (!state.running || S.captionRegion()) return;
+    S.captionsButton()?.click();
     setTimeout(() => {
-      if (state.running && !S.captionRegion())
-        ui.status('Activa los subtítulos (tecla «c») y elige Español en Configuración → Subtítulos.');
-    }, 3000);
+      if (!state.running || S.captionRegion()) return;
+      if (attempt < 3) ensureCaptions(attempt + 1);
+      else ui.status('No pude activar los subtítulos: pulsa «c» y elige Español en Configuración → Subtítulos.');
+    }, 5000);
   }
 
   function scan() {
