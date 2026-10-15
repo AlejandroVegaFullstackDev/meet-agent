@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="MeetAgent.Desktop.Views.ConsentDialog"
+        Title="Antes de empezar"
+        Width="440" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{DynamicResource SurfaceBrush}">
+  <StackPanel Margin="20" Spacing="14">
+    <StackPanel Spacing="4">
+      <TextBlock Text="¿Qué hago con esta reunión?" FontSize="18" FontWeight="SemiBold" />
+      <TextBlock Classes="muted" TextWrapping="Wrap"
+                 Text="Avisa a las demás personas antes de transcribir o grabar. Todo se queda en este equipo." />
+    </StackPanel>
+
+    <StackPanel Spacing="8">
+      <Button x:Name="RecordButton" Classes="choice" Click="OnRecord">
+        <StackPanel Spacing="2">
+          <TextBlock Text="Grabar y transcribir" FontWeight="SemiBold" />
+          <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
+                     Text="Guarda el audio (un archivo por canal) y la transcripción." />
+        </StackPanel>
+      </Button>
+      <Button x:Name="TranscribeButton" Classes="choice accent" Click="OnTranscribe">
+        <StackPanel Spacing="2">
+          <TextBlock Text="Solo transcribir" FontWeight="SemiBold" />
+          <TextBlock FontSize="12" TextWrapping="Wrap" Opacity="0.85"
+                     Text="El audio no se escribe en disco; solo se guarda el texto." />
+        </StackPanel>
+      </Button>
+      <Button x:Name="NothingButton" Classes="choice" Click="OnNothing">
+        <StackPanel Spacing="2">
+          <TextBlock Text="Nada" FontWeight="SemiBold" />
+          <TextBlock Classes="muted" FontSize="12" Text="No escucho ni guardo nada." />
+        </StackPanel>
+      </Button>
+    </StackPanel>
+  </StackPanel>
+</Window>

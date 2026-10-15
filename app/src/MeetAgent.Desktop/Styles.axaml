@@ -1,0 +1,55 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="SurfaceBrush" Color="#F6F7F9" />
+          <SolidColorBrush x:Key="CardBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="BorderSubtleBrush" Color="#E3E6EA" />
+          <SolidColorBrush x:Key="MutedBrush" Color="#6B7280" />
+          <SolidColorBrush x:Key="YoBrush" Color="#2563EB" />
+          <SolidColorBrush x:Key="YoSoftBrush" Color="#E8EFFE" />
+          <SolidColorBrush x:Key="OtrosBrush" Color="#B45309" />
+          <SolidColorBrush x:Key="OtrosSoftBrush" Color="#FDF1E3" />
+          <SolidColorBrush x:Key="LiveBrush" Color="#DC2626" />
+          <SolidColorBrush x:Key="IdleBrush" Color="#9CA3AF" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="SurfaceBrush" Color="#14171C" />
+          <SolidColorBrush x:Key="CardBrush" Color="#1C2027" />
+          <SolidColorBrush x:Key="BorderSubtleBrush" Color="#2B313A" />
+          <SolidColorBrush x:Key="MutedBrush" Color="#9AA3AF" />
+          <SolidColorBrush x:Key="YoBrush" Color="#7AA7FF" />
+          <SolidColorBrush x:Key="YoSoftBrush" Color="#1E2A44" />
+          <SolidColorBrush x:Key="OtrosBrush" Color="#F2B36B" />
+          <SolidColorBrush x:Key="OtrosSoftBrush" Color="#3A2A17" />
+          <SolidColorBrush x:Key="LiveBrush" Color="#F87171" />
+          <SolidColorBrush x:Key="IdleBrush" Color="#6B7280" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <Style Selector="TextBlock.muted">
+    <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+  </Style>
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="Cascadia Mono, DejaVu Sans Mono, Consolas, monospace" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+  </Style>
+
+  <!-- Opción del diálogo de consentimiento: botón con título y descripción -->
+  <Style Selector="Button.choice">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Padding" Value="14,10" />
+    <Setter Property="CornerRadius" Value="8" />
+  </Style>
+</Styles>

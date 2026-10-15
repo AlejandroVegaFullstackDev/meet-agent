@@ -9,7 +9,8 @@ Hexagonal: el núcleo (`MeetAgent.Core`) define puertos y lógica pura; los adap
                  │ OverlapMerger ─► Segment[Yo|Otros] ─► ITranscriptStore ◄── Storage.Sqlite
                  │ Wer (bench)                                     │
                  └─────────────────────────────────────────────────┘
-        Cli (capture/live/bench/export)      Desktop (Avalonia: bandeja, consentimiento, vista en vivo)
+                 MeetingSession (consentimiento → fuentes → LiveTranscription → store [+ grabación solo con «Grabar»])
+        Cli (capture/live/bench/meetings/search/export)      Desktop (Avalonia: bandeja, consentimiento, vista en vivo)
 ```
 
 - Audio interno: PCM 16 kHz, mono, 16 bits (`short`); a Whisper se pasa `float` normalizado.

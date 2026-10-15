@@ -9,3 +9,5 @@
 - **Sigue:** Desktop (Avalonia) y H4 (SQLite + FTS5 + export). Pendiente de Alejandro: aceptación de H1 con sonido y cambio a audífonos, referencia real de 5 min para H3, y decisión sobre el VAD Silero.
 - **Logrado:** H4: SQLite + FTS5 (sin tildes, prefijo, frase, bm25), `meetings`, `search` y `export` a Markdown. 71 pruebas.
 - **Sigue:** Desktop (Avalonia): bandeja, consentimiento y vista en vivo.
+- **Logrado:** Frente B: MeetAgent.Desktop (Avalonia 12) con bandeja, Empezar/Terminar, consentimiento de 3 opciones y vista en vivo; `MeetingSession` en el Core. 83 pruebas (70 Core, 6 Storage, 7 Desktop).
+- **Sigue:** que Alejandro la pruebe con audio real; pendientes de H1 y H3 y las decisiones de VAD y troceo.

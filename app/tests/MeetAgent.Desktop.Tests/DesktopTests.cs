@@ -1,0 +1,151 @@
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Headless.XUnit;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
+using MeetAgent.Core;
+using MeetAgent.Desktop.ViewModels;
+using MeetAgent.Desktop.Views;
+
+namespace MeetAgent.Desktop.Tests;
+
+public class MainViewModelTests
+{
+    [AvaloniaFact]
+    public async Task Elegir_Nada_no_arranca_ni_registra_reunion()
+    {
+        var (store, rec) = (new Fakes.Store(), new Fakes.Recorders());
+        var vm = new MainViewModel(Fakes.Session(store, rec), "falso", () => Task.FromResult(Consent.None));
+        await vm.ToggleCommand.ExecuteAsync(null);
+        Assert.False(vm.IsRunning);
+        Assert.Empty(store.Consents);
+        Assert.Equal(0, rec.Opened);
+        Assert.Equal("Empezar", vm.ButtonText);
+        Assert.Contains("Nada", vm.LastLog);
+    }
+
+    [AvaloniaFact]
+    public async Task Solo_transcribir_muestra_lineas_en_vivo_y_no_abre_grabadores()
+    {
+        var (store, rec) = (new Fakes.Store(), new Fakes.Recorders());
+        var vm = new MainViewModel(Fakes.Session(store, rec, seconds: 30), "falso", () => Task.FromResult(Consent.TranscribeOnly),
+            ui: a => Dispatcher.UIThread.Post(a));
+        await vm.ToggleCommand.ExecuteAsync(null);
+        Assert.True(vm.IsRunning);
+        Assert.Equal("Terminar", vm.ButtonText);
+        Assert.Equal("En vivo · solo transcribiendo", vm.StatusText);
+        Assert.Equal("Audio: no se guarda", vm.DiskText);
+
+        await WaitUntil(() => vm.Lines.Count >= 2);
+        Assert.Contains(vm.Lines, l => l.Speaker == Speaker.Yo);
+        Assert.Contains(vm.Lines, l => l.Speaker == Speaker.Otros);
+        Assert.Matches(@"^\d\d:\d\d:\d\d$", vm.Lines[0].Time);
+
+        await vm.ToggleCommand.ExecuteAsync(null);
+        Assert.False(vm.IsRunning);
+        Assert.Equal(["transcribir"], store.Consents);
+        Assert.Equal(0, rec.Opened);
+    }
+
+    [AvaloniaFact]
+    public async Task Grabar_y_transcribir_abre_un_grabador_por_canal()
+    {
+        var (store, rec) = (new Fakes.Store(), new Fakes.Recorders());
+        var vm = new MainViewModel(Fakes.Session(store, rec), "falso", () => Task.FromResult(Consent.RecordAndTranscribe),
+            ui: a => Dispatcher.UIThread.Post(a));
+        await vm.ToggleCommand.ExecuteAsync(null);
+        Assert.Equal("En vivo · grabando y transcribiendo", vm.StatusText);
+        Assert.Equal(2, rec.Opened);
+        await vm.ToggleCommand.ExecuteAsync(null);
+        Assert.Equal(["grabar"], store.Consents);
+    }
+
+    internal static async Task WaitUntil(Func<bool> condition, int timeoutMs = 10000)
+    {
+        var until = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (!condition())
+        {
+            if (DateTime.UtcNow > until) throw new TimeoutException();
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(20);
+        }
+    }
+}
+
+public class ConsentDialogTests
+{
+    private static async Task<Consent> Answer(Action<ConsentDialog> act)
+    {
+        var owner = new Window();
+        owner.Show();
+        var dialog = new ConsentDialog();
+        var task = dialog.ShowDialog<Consent?>(owner);
+        Dispatcher.UIThread.RunJobs();
+        act(dialog);
+        Dispatcher.UIThread.RunJobs();
+        var result = await task;
+        owner.Close();
+        return result ?? Consent.None;
+    }
+
+    private static void Click(ConsentDialog d, string name) =>
+        d.FindControl<Button>(name)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+    [AvaloniaFact]
+    public async Task Cada_boton_devuelve_su_opcion()
+    {
+        Assert.Equal(Consent.RecordAndTranscribe, await Answer(d => Click(d, "RecordButton")));
+        Assert.Equal(Consent.TranscribeOnly, await Answer(d => Click(d, "TranscribeButton")));
+        Assert.Equal(Consent.None, await Answer(d => Click(d, "NothingButton")));
+    }
+
+    [AvaloniaFact]
+    public async Task Esc_o_cerrar_la_ventana_equivalen_a_Nada()
+    {
+        Assert.Equal(Consent.None, await Answer(d => d.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null)));
+        Assert.Equal(Consent.None, await Answer(d => d.Close()));
+    }
+}
+
+/// <summary>Renderiza las vistas a PNG (data/screens/) para revisar el diseño sin pantalla.</summary>
+public class ScreenshotTests
+{
+    private static string ScreensDir()
+    {
+        for (var d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
+            if (Directory.Exists(Path.Combine(d.FullName, "models")))
+                return Directory.CreateDirectory(Path.Combine(d.FullName, "data", "screens")).FullName;
+        return Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "meetagent-screens")).FullName;
+    }
+
+    [AvaloniaFact]
+    public async Task Ventana_principal_en_vivo()
+    {
+        var (store, rec) = (new Fakes.Store(), new Fakes.Recorders());
+        var vm = new MainViewModel(Fakes.Session(store, rec, seconds: 60), "small-q5_1 (4 hilos)", () => Task.FromResult(Consent.TranscribeOnly),
+            ui: a => Dispatcher.UIThread.Post(a));
+        var w = new MainWindow { DataContext = vm };
+        w.Show();
+        w.CaptureRenderedFrame()!.Save(Path.Combine(ScreensDir(), "main-idle.png"));
+        await vm.ToggleCommand.ExecuteAsync(null);
+        await MainViewModelTests.WaitUntil(() => vm.Lines.Count >= 6);
+        Dispatcher.UIThread.RunJobs();
+        var frame = w.CaptureRenderedFrame();
+        Assert.NotNull(frame);
+        frame!.Save(Path.Combine(ScreensDir(), "main-live.png"));
+        await vm.ToggleCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
+    public void Dialogo_de_consentimiento()
+    {
+        var owner = new Window();
+        owner.Show();
+        var d = new ConsentDialog();
+        _ = d.ShowDialog<Consent?>(owner);
+        Dispatcher.UIThread.RunJobs();
+        d.CaptureRenderedFrame()!.Save(Path.Combine(ScreensDir(), "consent.png"));
+        d.Close();
+    }
+}
