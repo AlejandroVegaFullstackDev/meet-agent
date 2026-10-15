@@ -15,6 +15,11 @@ Windows y Linux · C# / .NET 10 · Whisper (whisper.cpp) en CPU · Avalonia · S
 - **Arquitectura hexagonal:** el Core no depende de la plataforma. Captura con WASAPI en Windows y PipeWire/Pulse en Linux, y sigue al dispositivo por defecto si cambias de parlantes a audífonos.
 - **Medido, no supuesto:** `bench` calcula el WER (S/D/I) por modelo y por modo. Cada decisión tiene su ADR en [docs/adr/](docs/adr/).
 
+## Instalar
+- **Ubuntu/Debian:** `scripts/publish.sh linux-x64 && scripts/package-deb.sh` → `sudo apt install ./dist/meetagent_0.1.0_amd64.deb`. Queda en el menú como **MeetAgent** y en la terminal como `meetagent` / `meetagent-mcp`. Pon el modelo en `~/.local/share/MeetAgent/models/`.
+- **Windows:** `dist/win-x64/` completo (`MeetAgent.exe` + sus DLL); el modelo va en `%LOCALAPPDATA%\MeetAgent\models\`.
+- **Sin instalar:** `dist/linux-x64/MeetAgent` funciona directo si está dentro de la carpeta del proyecto (usa `models/` y `data/` de ahí).
+
 ## Usarlo
 1. Descarga un modelo en `models/` (por ejemplo `ggml-small-q5_1.bin` de [huggingface.co/ggerganov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp)).
 2. App de escritorio: `scripts/publish.sh` genera `dist/linux-x64/MeetAgent` y `dist/win-x64/MeetAgent.exe` (más `meetagent-mcp`), que no requieren .NET instalado. Busca `models/` subiendo desde su carpeta; si no lo encuentra, usa `~/.local/share/MeetAgent/` en Linux o `%LOCALAPPDATA%\MeetAgent\` en Windows (o `MEETAGENT_HOME`).
