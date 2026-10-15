@@ -13,3 +13,7 @@ obj/
 TestResults/
 # Ejecutables publicados
 dist/
+
+# Vexa local: secretos y pid
+deploy/vexa/.env.local
+deploy/vexa/.stt.pid
