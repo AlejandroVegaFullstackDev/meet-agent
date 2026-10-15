@@ -13,6 +13,7 @@
   function mergeCaption(full, incoming) {
     if (!full) return incoming;
     if (incoming.startsWith(full)) return incoming;                    // creció
+    if (full.includes(incoming)) return full;                          // parpadeo: ese trozo ya está
     const probe = incoming.slice(0, Math.min(PROBE, incoming.length));
     if (probe.length >= MIN_PROBE) {
       const idx = full.lastIndexOf(probe);
@@ -22,6 +23,16 @@
     while (p < full.length && p < incoming.length && full[p] === incoming[p]) p++;
     if (p >= 8 && p >= 0.6 * Math.min(full.length, incoming.length)) {
       return full.slice(0, p) + incoming.slice(p);                     // corrección con inicio corto
+    }
+    // Meet reescribió el inicio: se alinea por las últimas palabras del texto anterior
+    // que reaparecen en el nuevo (sin distinguir mayúsculas).
+    const lowFull = full.toLowerCase(), lowIn = incoming.toLowerCase();
+    const words = full.split(/\s+/);
+    for (let n = Math.min(6, words.length); n >= 2; n--) {
+      const tail = words.slice(-n).join(' ');
+      if (tail.length < 8) continue;
+      const at = lowIn.indexOf(tail.toLowerCase());
+      if (at >= 0) return full.slice(0, lowFull.lastIndexOf(tail.toLowerCase())) + incoming.slice(at);
     }
     return full + ' ' + incoming;                                      // Meet reinició el bloque
   }
@@ -47,7 +58,7 @@
       if (!t) return;
       let b = this.blocks.get(key);
       if (!b) {
-        b = { speaker: '', full: '', emitted: 0, pendingStart: null, lastChange: nowMs };
+        b = { speaker: '', full: '', emitted: 0, emittedText: '', pendingStart: null, lastChange: nowMs };
         this.blocks.set(key, b);
       }
       if (speaker && speaker.trim()) b.speaker = speaker.trim();
@@ -64,9 +75,12 @@
     flush(nowMs) {
       const out = [];
       for (const b of this.blocks.values()) {
+        resync(b);
         const pending = b.full.slice(b.emitted);
         if (!pending.trim()) continue;
-        if (nowMs - b.lastChange >= this.stableMs) {
+        // Con 1-2 palabras pendientes se espera el doble: suele ser una pausa a mitad de frase.
+        const wait = pending.trim().split(/\s+/).length <= 2 ? 2 * this.stableMs : this.stableMs;
+        if (nowMs - b.lastChange >= wait) {
           out.push(this.#emit(b, b.full.length, b.lastChange));
         } else if (pending.length > this.maxPendingChars) {
           const cut = lastSentenceEnd(pending.slice(0, pending.length - 40));
@@ -80,6 +94,7 @@
     remove(key, nowMs) {
       const b = this.blocks.get(key);
       this.blocks.delete(key);
+      if (b) resync(b);
       if (!b || !b.full.slice(b.emitted).trim()) return [];
       return [this.#emit(b, b.full.length, Math.min(nowMs, b.lastChange))];
     }
@@ -88,6 +103,7 @@
     preview() {
       let best = null;
       for (const b of this.blocks.values()) {
+        resync(b);
         const text = b.full.slice(b.emitted).trim();
         if (text && (!best || b.lastChange >= best.lastChange)) best = { b, text, lastChange: b.lastChange };
       }
@@ -107,6 +123,7 @@
       const text = b.full.slice(b.emitted, upTo).trim();
       const startMs = b.pendingStart ?? endMs;
       b.emitted = upTo;
+      b.emittedText = b.full.slice(0, upTo);
       b.pendingStart = b.full.slice(upTo).trim() ? endMs : null;
       const self = SELF_LABELS.has(b.speaker.toLowerCase());
       return {
@@ -117,6 +134,27 @@
         text,
       };
     }
+  }
+
+  /**
+   * Meet puede reescribir texto que ya emitimos (corrige el inicio, cambia mayúsculas), y entonces
+   * la posición numérica deja de apuntar al mismo lugar. Se busca dónde quedaron las últimas
+   * palabras emitidas; si no aparecen, se avanza al próximo espacio para no partir una palabra.
+   */
+  function resync(b) {
+    if (!b.emittedText || b.full.startsWith(b.emittedText)) return;
+    const words = b.emittedText.trim().split(/\s+/);
+    const lowerFull = b.full.toLowerCase();
+    for (let n = Math.min(4, words.length); n >= 1; n--) {
+      const tail = words.slice(-n).join(' ').toLowerCase();
+      if (tail.length < 4 && n > 1) continue;
+      const idx = lowerFull.lastIndexOf(tail);
+      if (idx >= 0) { b.emitted = idx + tail.length; b.emittedText = b.full.slice(0, b.emitted); return; }
+    }
+    let i = Math.min(b.emitted, b.full.length);
+    while (i < b.full.length && b.full[i] !== ' ' && i > 0 && b.full[i - 1] !== ' ') i++;
+    b.emitted = i;
+    b.emittedText = b.full.slice(0, i);
   }
 
   function lastSentenceEnd(s) {

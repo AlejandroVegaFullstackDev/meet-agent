@@ -46,10 +46,11 @@ test('un bloque estable 2 s se emite una sola vez con sus tiempos', () => {
 
 test('si el mismo bloque sigue creciendo después, solo se emite lo nuevo', () => {
   const a = new CaptionAssembler({ startMs: 0, stableMs: 1000 });
+  // (2 palabras pendientes esperan 2 × stableMs: ver la prueba de pausas cortas)
   a.observe('b1', 'Ana', 'Primera frase.', 0);
-  assert.equal(a.flush(1500)[0].text, 'Primera frase.');
+  assert.equal(a.flush(2500)[0].text, 'Primera frase.');
   a.observe('b1', 'Ana', 'Primera frase. Segunda frase.', 3000);
-  const next = a.flush(4500);
+  const next = a.flush(5500);
   assert.equal(next.length, 1);
   assert.equal(next[0].text, 'Segunda frase.');
   assert.equal(next[0].start, 3);
@@ -100,4 +101,44 @@ test('preview muestra lo que se está diciendo y todavía no se emitió', () => 
   assert.deepEqual(a.preview(), { speaker: 'Alejandro Vega', text: 'yo también estoy' });   // el más reciente
   a.flush(5000);
   assert.equal(a.preview(), null);                  // ya se emitió todo
+});
+
+test('mergeCaption: un fragmento corto repetido o que ya está no se vuelve a agregar', () => {
+  // Meet a veces vuelve a mostrar un trozo que ya estaba (parpadeo); no debe duplicarse.
+  assert.equal(mergeCaption('To in? He was.', 'To in?'), 'To in? He was.');
+  assert.equal(mergeCaption('Está con la tabla usuarios', 'la tabla'), 'Está con la tabla usuarios');
+});
+
+test('un fragmento que parpadea muchas veces sale una sola vez', () => {
+  const a = new CaptionAssembler({ startMs: 0, stableMs: 1000 });
+  for (let i = 0; i < 10; i++) {
+    a.observe('b1', 'Ana', 'To in?', i * 100);
+    a.observe('b1', 'Ana', 'To in? He was.', i * 100 + 50);
+  }
+  assert.equal(a.flush(5000)[0].text, 'To in? He was.');
+});
+
+test('si Meet reescribe texto ya emitido, lo nuevo no sale con la palabra cortada', () => {
+  const a = new CaptionAssembler({ startMs: 0, stableMs: 1000 });
+  a.observe('b1', 'Ana', 'Con ustedes y usuarios. cierto', 0);
+  assert.equal(a.flush(2000)[0].text, 'Con ustedes y usuarios. cierto');
+  // Meet corrige el inicio ("Con ustedes" → "Con los usuarios") y sigue hablando:
+  a.observe('b1', 'Ana', 'Con los usuarios. Cierto que vas a tener el nombre.', 3000);
+  const next = a.flush(5000);
+  assert.equal(next.length, 1);
+  assert.equal(next[0].text, 'que vas a tener el nombre.');
+});
+
+test('una pausa corta a mitad de frase no deja fragmentos de 1-2 palabras sueltos', () => {
+  const a = new CaptionAssembler({ startMs: 0, stableMs: 2000 });
+  a.observe('b1', 'Ana', 'porque hay', 0);
+  assert.equal(a.flush(2500).length, 0);            // corto: espera más (2 × stableMs)
+  a.observe('b1', 'Ana', 'porque hay tantas formas de hacerlo.', 3000);
+  const out = a.flush(5500);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].text, 'porque hay tantas formas de hacerlo.');
+  // pero si de verdad terminó ahí, sale igual (solo que después):
+  const b = new CaptionAssembler({ startMs: 0, stableMs: 2000 });
+  b.observe('b1', 'Ana', 'listo', 0);
+  assert.equal(b.flush(4500)[0].text, 'listo');
 });
