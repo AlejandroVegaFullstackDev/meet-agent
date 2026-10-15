@@ -99,10 +99,10 @@ public sealed class LiveTranscription(IReadOnlyList<IAudioSource> sources, ITran
                 var done = Stopwatch.GetTimestamp();
 
                 var kept = window.Keep(parts, isFirstChunk: afterGap, w.Chunk.Samples.Length / (double)AudioFormat.SampleRate)
-                                 .Select(p => p with { Text = HallucinationFilter.Clean(p.Text) })
                                  .Where(p => p.Text.Length > 0)
                                  .ToList();
-                var joined = string.Join(' ', kept.Select(p => p.Text));
+                // Limpiar sobre el texto unido: con una palabra por segmento, "[Ruido de la puerta]" llega partido.
+                var joined = HallucinationFilter.Clean(string.Join(' ', kept.Select(p => p.Text)));
                 var merged = kept.Count == 0 || HallucinationFilter.IsHallucination(joined) ? "" : merger.Add(joined);
                 Stats.Add(Stopwatch.GetElapsedTime(w.ReadyTimestamp, done), Stopwatch.GetElapsedTime(started, done),
                     w.Chunk.Samples.Length / (double)AudioFormat.SampleRate);

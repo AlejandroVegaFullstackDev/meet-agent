@@ -24,7 +24,16 @@ public static partial class HallucinationFilter
     [GeneratedRegex(@"\[[^\]]*\]|\([^)]*\)|\*[^*]*\*")]
     private static partial Regex Annotation();
 
-    public static string Clean(string text) => Regex.Replace(Annotation().Replace(text, " "), @"\s+", " ").Trim();
+    // Restos de una anotación partida entre chunks: "…puerta]" al inicio o "[Ruido de…" al final.
+    [GeneratedRegex(@"^[^\[\(]*[\]\)]|[\[\(][^\]\)]*$")]
+    private static partial Regex DanglingAnnotation();
+
+    public static string Clean(string text)
+    {
+        var t = Annotation().Replace(text, " ");
+        t = DanglingAnnotation().Replace(t, " ");
+        return Regex.Replace(t, @"\s+", " ").Trim();
+    }
 
     public static bool IsHallucination(string text)
     {

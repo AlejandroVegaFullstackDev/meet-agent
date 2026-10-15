@@ -14,7 +14,7 @@ public class MeetingSessionTests
 
         public async IAsyncEnumerable<short[]> ReadAsync([EnumeratorCancellation] CancellationToken ct)
         {
-            for (int b = 0; b < seconds * 10; b++)
+            for (int b = 0; b < seconds * 10 && !ct.IsCancellationRequested; b++)
             {
                 await Task.Yield();
                 var block = new short[1600];
@@ -26,11 +26,11 @@ public class MeetingSessionTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class Sources : IAudioSourceFactory
+    private sealed class Sources(int seconds = 5) : IAudioSourceFactory
     {
         public int Created;
-        public IAudioSource CreateMicrophone() { Created++; return new ToneSource(Speaker.Yo, 5); }
-        public IAudioSource CreateLoopback() { Created++; return new ToneSource(Speaker.Otros, 5); }
+        public IAudioSource CreateMicrophone() { Created++; return new ToneSource(Speaker.Yo, seconds); }
+        public IAudioSource CreateLoopback() { Created++; return new ToneSource(Speaker.Otros, seconds); }
     }
 
     private sealed class EchoTranscriber : ITranscriber
@@ -133,7 +133,8 @@ public class MeetingSessionTests
     [Fact]
     public async Task No_permite_dos_sesiones_a_la_vez()
     {
-        var (s, r, st) = (new Sources(), new Recorders(), new MemoryStore());
+        // Fuente larga: la primera sesión sigue viva cuando se intenta abrir la segunda.
+        var (s, r, st) = (new Sources(seconds: 600), new Recorders(), new MemoryStore());
         var session = Make(s, r, st);
         await session.StartAsync(Consent.TranscribeOnly, "x");
         await Assert.ThrowsAsync<InvalidOperationException>(() => session.StartAsync(Consent.TranscribeOnly, "y"));

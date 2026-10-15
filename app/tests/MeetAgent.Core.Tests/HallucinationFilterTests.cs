@@ -25,6 +25,16 @@ public class HallucinationFilterTests
         Assert.False(HallucinationFilter.IsHallucination(text));
     }
 
+    [Theory]
+    [InlineData("de la puerta] bueno, sigamos", "bueno, sigamos")]   // el "[" quedó en el chunk anterior
+    [InlineData("vamos a empezar [Ruido de", "vamos a empezar")]    // el "]" quedará en el siguiente
+    [InlineData("fondo) entonces sí", "entonces sí")]
+    [InlineData("dijo que (risas", "dijo que")]
+    public void Quita_anotaciones_partidas_en_la_frontera(string input, string expected)
+    {
+        Assert.Equal(expected, HallucinationFilter.Clean(input));
+    }
+
     [Fact]
     public void Quita_anotaciones_entre_corchetes_pero_conserva_el_resto()
     {

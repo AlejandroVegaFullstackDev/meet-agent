@@ -107,6 +107,28 @@ public class LiveTranscriptionTests
         Assert.Empty(await Run(live));
     }
 
+    /// <summary>Devuelve una palabra por segmento, como Whisper con timestamps por palabra.</summary>
+    private sealed class WordTranscriber(string text) : ITranscriber
+    {
+        public string Name => "palabras";
+        public Task<IReadOnlyList<RecognizedText>> TranscribeAsync(float[] samples, CancellationToken ct)
+        {
+            var words = text.Split(' ');
+            return Task.FromResult<IReadOnlyList<RecognizedText>>(words.Select((w, i) =>
+                new RecognizedText(TimeSpan.FromSeconds(1 + i * 0.3), TimeSpan.FromSeconds(1.2 + i * 0.3), w)).ToList());
+        }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    [Fact]
+    public async Task Una_anotacion_partida_en_palabras_se_quita_entera()
+    {
+        var live = new LiveTranscription([new FakeSource(Speaker.Yo, Loud, Loud, Loud, Loud, Loud)],
+            new WordTranscriber("[Ruido de la puerta] bueno, sigamos"), new EnergyVad());
+        var seg = Assert.Single(await Run(live));
+        Assert.Equal("bueno, sigamos", seg.Text);
+    }
+
     [Fact]
     public async Task Registra_latencias_y_entrega_el_audio_crudo_al_grabador()
     {
