@@ -14,7 +14,10 @@ Meet (subtítulos) → extensión → native messaging → meetagent-host → SQ
    ```
 2. Carga la extensión (carpeta `extension/`):
    - **Edge / Chrome / Chromium:** `edge://extensions` (o `chrome://extensions`) → activa *Modo de desarrollador* → *Cargar descomprimida* → elige `extension/`.
-   - **Firefox:** `about:debugging#/runtime/this-firefox` → *Cargar complemento temporal…* → elige `extension/manifest.json`. En Firefox normal es temporal (se quita al cerrarlo); para dejarla fija hay que firmarla en addons.mozilla.org (sin publicarla).
+   - **Firefox (incluido el de snap de Ubuntu):** abre `about:debugging#/runtime/this-firefox` → *Cargar complemento temporal…* → elige `extension/manifest.json`.
+     - La primera vez que pulses *Transcribir*, Ubuntu pregunta si Firefox puede abrir **MeetAgent** (portal del sistema): acepta.
+     - Si dice que no encuentra MeetAgent: en `about:config` pon `widget.use-xdg-desktop-portal.native-messaging` = `1` y reinicia Firefox.
+     - En Firefox normal el complemento temporal se quita al cerrar Firefox (hay que volver a cargarlo, 10 s). Para dejarlo fijo: firmarlo como *no listado* en addons.mozilla.org con tu cuenta (gratis, no se publica).
 3. Entra a un Meet: abajo a la izquierda aparece el panel **MeetAgent** → *Transcribir*. Si los subtítulos no se activan solos, pulsa `c` y elige **Español** en *Configuración → Subtítulos*.
 
 ## Uso

@@ -10,9 +10,17 @@
   let state = { running: false, meetingId: null, assembler: null, keys: new WeakMap(), nextKey: 1, seen: new Set(), saved: 0, last: '' };
   let ui;
 
+  // Firefox (browser.*) usa promesas; Chrome/Edge (chrome.*) usa callbacks.
   const native = (payload) => new Promise((resolve) => {
-    try { api.runtime.sendMessage({ cmd: 'native', payload }, (r) => resolve(r ?? { ok: false, error: api.runtime.lastError?.message || 'sin respuesta' })); }
-    catch (e) { resolve({ ok: false, error: String(e) }); }
+    const msg = { cmd: 'native', payload };
+    const fail = (e) => resolve({ ok: false, error: e?.message || String(e || 'sin respuesta') });
+    try {
+      if (globalThis.browser?.runtime?.sendMessage) {
+        globalThis.browser.runtime.sendMessage(msg).then((r) => resolve(r ?? { ok: false, error: 'sin respuesta' }), fail);
+      } else {
+        chrome.runtime.sendMessage(msg, (r) => resolve(r ?? { ok: false, error: chrome.runtime.lastError?.message || 'sin respuesta' }));
+      }
+    } catch (e) { fail(e); }
   });
 
   // ---------- panel ----------
