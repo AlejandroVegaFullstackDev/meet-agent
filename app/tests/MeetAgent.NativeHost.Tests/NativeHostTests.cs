@@ -91,6 +91,21 @@ public class CaptionHostTests
     }
 
     [Fact]
+    public void Diag_escribe_la_estructura_en_un_archivo_local()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"diag-{Guid.NewGuid():N}.txt");
+        try
+        {
+            using var store = new SqliteTranscriptStore("Data Source=:memory:");
+            var host = new CaptionHost(store, diagPath: path);
+            var r = JsonDocument.Parse(host.Handle("""{"type":"diag","text":"<div role=region> texto:42"}""")).RootElement;
+            Assert.True(r.GetProperty("ok").GetBoolean());
+            Assert.Contains("texto:42", File.ReadAllText(path));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public void Al_cerrarse_el_navegador_se_cierran_las_reuniones_abiertas()
     {
         using var f = new HostFixture();

@@ -91,3 +91,13 @@ test('ignora bloques vacíos', () => {
   a.observe('b1', 'Ana', '   ', 0);
   assert.equal(a.flush(1000).length, 0);
 });
+
+test('preview muestra lo que se está diciendo y todavía no se emitió', () => {
+  const a = new CaptionAssembler({ startMs: 0, stableMs: 2000, selfName: 'Alejandro Vega' });
+  assert.equal(a.preview(), null);
+  a.observe('b1', 'Ana', 'Hola a', 0);
+  a.observe('b2', 'Tú', 'yo también estoy', 500);
+  assert.deepEqual(a.preview(), { speaker: 'Alejandro Vega', text: 'yo también estoy' });   // el más reciente
+  a.flush(5000);
+  assert.equal(a.preview(), null);                  // ya se emitió todo
+});

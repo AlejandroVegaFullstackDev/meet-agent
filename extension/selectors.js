@@ -117,9 +117,31 @@
     return [line, ...[...el.children].slice(0, 6).map((c) => describe(c, depth + 1))].filter(Boolean).join('\n');
   }
 
+  /**
+   * Reporte para ajustar selectores: regiones, zonas aria-live y botones de subtítulos de la página,
+   * más la estructura de la región detectada. Solo estructura y largos; nunca lo que dice la gente.
+   */
+  function diagnose(doc = document) {
+    const line = (el) => `<${el.tagName.toLowerCase()} class="${(el.className && el.className.baseVal === undefined ? el.className : '') || ''}"` +
+      ['role', 'aria-label', 'aria-live', 'jsname', 'jscontroller'].map((a) => el.getAttribute(a) ? ` ${a}="${el.getAttribute(a)}"` : '').join('') +
+      `> hijos:${el.children.length} texto:${(el.innerText || '').length}`;
+    const out = [`url: ${location.pathname}`, `self: ${selfName(doc) ? 'sí' : 'no'}`];
+    out.push('--- regiones', ...[...doc.querySelectorAll('[role="region"]')].map(line));
+    out.push('--- aria-live', ...[...doc.querySelectorAll('[aria-live]')].slice(0, 30).map(line));
+    out.push('--- botones de subtítulos', ...[...doc.querySelectorAll('button[aria-label]')]
+      .filter((b) => /subt|caption|cc/i.test(b.getAttribute('aria-label'))).map((b) => `${line(b)} pressed:${b.getAttribute('aria-pressed')}`));
+    const region = captionRegion(doc);
+    out.push(`--- región detectada: ${region ? 'sí' : 'NO'}`);
+    if (region) {
+      out.push(describe(region));
+      out.push(`--- bloques leídos: ${captionBlocks(region).length}`);
+    }
+    return out.join('\n');
+  }
+
   const clean = (s) => (s || '').replace(/\s+/g, ' ').trim();
 
   root.MeetAgent = Object.assign(root.MeetAgent || {}, {
-    selectors: { captionRegion, captionBlocks, captionsButton, selfName, meetCode, chatButton, chatInput, sendButton, describe },
+    selectors: { captionRegion, captionBlocks, captionsButton, selfName, meetCode, chatButton, chatInput, sendButton, describe, diagnose },
   });
 })(globalThis);

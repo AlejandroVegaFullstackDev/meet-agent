@@ -84,6 +84,18 @@
       return [this.#emit(b, b.full.length, Math.min(nowMs, b.lastChange))];
     }
 
+    /** Lo que se está diciendo ahora y aún no se emitió (para mostrarlo en gris en el panel). */
+    preview() {
+      let best = null;
+      for (const b of this.blocks.values()) {
+        const text = b.full.slice(b.emitted).trim();
+        if (text && (!best || b.lastChange >= best.lastChange)) best = { b, text, lastChange: b.lastChange };
+      }
+      if (!best) return null;
+      const self = SELF_LABELS.has(best.b.speaker.toLowerCase());
+      return { speaker: self ? (this.selfName || 'Yo') : (best.b.speaker || 'Participante'), text: best.text };
+    }
+
     /** Todo lo pendiente (al detener la transcripción). */
     drain(nowMs) {
       const out = [];

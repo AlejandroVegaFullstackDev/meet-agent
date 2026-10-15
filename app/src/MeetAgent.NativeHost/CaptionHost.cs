@@ -10,7 +10,7 @@ namespace MeetAgent.NativeHost;
 /// en la misma SQLite que el resto de MeetAgent (búsqueda, export y MCP funcionan igual).
 /// Mensajes: hello · start {meet, title?} · segment {meetingId, speaker, self?, start, end, text} · end {meetingId}.
 /// </summary>
-public sealed class CaptionHost(ITranscriptStore store, Func<DateTimeOffset>? now = null)
+public sealed class CaptionHost(ITranscriptStore store, Func<DateTimeOffset>? now = null, string? diagPath = null)
 {
     public const string Version = "0.1.0";
     private readonly Func<DateTimeOffset> _now = now ?? (() => DateTimeOffset.Now);
@@ -31,6 +31,7 @@ public sealed class CaptionHost(ITranscriptStore store, Func<DateTimeOffset>? no
                 "start" => Start(msg),
                 "segment" => Segment(msg),
                 "end" => End(msg),
+                "diag" => Diag(msg),
                 var t => Error($"Tipo de mensaje desconocido: {t}"),
             };
         }
@@ -71,6 +72,19 @@ public sealed class CaptionHost(ITranscriptStore store, Func<DateTimeOffset>? no
         if (!_open.Remove(id)) return Error($"La reunión {id} no está abierta");
         store.EndMeeting(id, _now());
         return Reply(new() { ["type"] = "ended", ["ok"] = true, ["meetingId"] = id });
+    }
+
+    /// <summary>
+    /// Diagnóstico de selectores: la extensión manda la estructura del DOM de Meet (sin el texto
+    /// de lo que se dice) y queda en un archivo local para ajustar selectors.js.
+    /// </summary>
+    private string Diag(JsonObject m)
+    {
+        if (diagPath is null) return Error("Diagnóstico no disponible");
+        var text = ((string?)m["text"]) ?? "";
+        if (text.Length > 200_000) text = text[..200_000];
+        File.WriteAllText(diagPath, $"{_now():yyyy-MM-dd HH:mm:ss}\n{text}\n");
+        return Reply(new() { ["type"] = "diag", ["ok"] = true, ["path"] = diagPath });
     }
 
     /// <summary>El navegador cerró el puerto (pestaña o navegador cerrados): se cierran las reuniones abiertas.</summary>
