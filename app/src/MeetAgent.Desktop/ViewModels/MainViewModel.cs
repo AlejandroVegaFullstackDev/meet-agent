@@ -53,6 +53,9 @@ public sealed partial class MainViewModel : ObservableObject
     });
 
     public ObservableCollection<TranscriptLine> Lines { get; } = new();
+
+    /// <summary>Historial de todas las reuniones (pestaña «Historial»).</summary>
+    public HistoryViewModel? History { get; init; }
     public string TranscriberName { get; }
     public int SegmentCount => Lines.Count;
 

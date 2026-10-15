@@ -174,6 +174,31 @@ public class ScreenshotTests
     }
 
     [AvaloniaFact]
+    public void Historial_con_reuniones_de_los_tres_origenes()
+    {
+        var store = new MeetAgent.Storage.Sqlite.SqliteTranscriptStore("Data Source=:memory:");
+        var t0 = new DateTimeOffset(2026, 10, 15, 9, 0, 0, TimeSpan.FromHours(-5));
+        var a = store.StartMeeting("Planeación del trimestre", t0, "transcribir");
+        store.AddSegment(a, new TranscriptSegment(Speaker.Yo, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(4), "Empecemos con el presupuesto."));
+        store.EndMeeting(a, t0.AddMinutes(32));
+        var b = store.StartMeeting("SPRINT BRIEF", t0.AddDays(1), "subtitulos");
+        store.AddSegment(b, new TranscriptSegment(Speaker.Otros, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(9), "Hoy revisamos la tabla de concesionarios y sus llaves foráneas.", "Juan Pérez"));
+        store.AddSegment(b, new TranscriptSegment(Speaker.Yo, TimeSpan.FromSeconds(12), TimeSpan.FromSeconds(14), "Perfecto, ¿y la de usuarios?", "Alejandro Vega"));
+        store.AddSegment(b, new TranscriptSegment(Speaker.Otros, TimeSpan.FromSeconds(16), TimeSpan.FromSeconds(20), "También, con el mismo esquema.", "Ana Gómez"));
+        store.EndMeeting(b, t0.AddDays(1).AddMinutes(18));
+        var history = new HistoryViewModel(store, Path.GetTempPath());
+        var vm = new MainViewModel(Fakes.Session(new Fakes.Store(), new Fakes.Recorders()), "small-q5_1 (4 hilos)", () => Task.FromResult(Consent.None)) { History = history };
+        var w = new MainWindow { DataContext = vm };
+        w.Show();
+        w.FindControl<TabControl>("Tabs")!.SelectedIndex = 1;
+        Dispatcher.UIThread.RunJobs();
+        history.Selected = history.Meetings[0];
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(3, history.Lines.Count);
+        w.CaptureRenderedFrame()!.Save(Path.Combine(ScreensDir(), "history.png"));
+    }
+
+    [AvaloniaFact]
     public void Dialogo_de_consentimiento()
     {
         var owner = new Window();

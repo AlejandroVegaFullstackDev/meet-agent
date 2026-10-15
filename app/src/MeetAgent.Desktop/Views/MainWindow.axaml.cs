@@ -15,6 +15,17 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         DataContextChanged += (_, _) => Bind(DataContext as MainViewModel);
+        // Al abrir el historial se relee la base (la extensión y el bot escriben desde otros procesos).
+        // SelectionChanged burbujea: solo cuenta el de las pestañas, no el de las listas de adentro.
+        Tabs.SelectionChanged += (_, e) =>
+        {
+            if (e.Source == Tabs && Tabs.SelectedIndex == 1) _vm?.History?.Refresh();
+        };
+        ResultsList.SelectionChanged += (_, e) =>
+        {
+            e.Handled = true;
+            if (ResultsList.SelectedItem is SearchResultItem hit) _vm?.History?.OpenResultCommand.Execute(hit);
+        };
     }
 
     private void Bind(MainViewModel? vm)

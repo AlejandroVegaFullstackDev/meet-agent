@@ -38,7 +38,10 @@ public sealed class App : Application
             _vm = new MainViewModel(_services.Session, _services.Transcriber.Name,
                 askConsent: () => ConsentDialog.AskAsync(ShowWindow()),
                 ui: a => Dispatcher.UIThread.Post(a),
-                botFactory: _services.BotFactory);
+                botFactory: _services.BotFactory)
+            {
+                History = new HistoryViewModel(_services.Store, AppServices.DataDir),
+            };
             _window.DataContext = _vm;
             _vm.PropertyChanged += OnVmChanged;
             _idleIcon = LoadIcon("idle.png");

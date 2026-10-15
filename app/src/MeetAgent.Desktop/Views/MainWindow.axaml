@@ -4,10 +4,29 @@
         x:Class="MeetAgent.Desktop.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="MeetAgent"
-        Width="760" Height="560" MinWidth="460" MinHeight="360"
+        Width="900" Height="600" MinWidth="520" MinHeight="380"
         Background="{DynamicResource SurfaceBrush}">
 
-  <DockPanel Margin="16">
+  <Window.Resources>
+    <!-- Una línea de transcripción: [hh:mm:ss] [Nombre|Yo|Otros] texto (vista en vivo e historial) -->
+    <DataTemplate x:Key="LineTemplate" x:DataType="vm:TranscriptLine">
+      <Grid ColumnDefinitions="Auto,Auto,*" Margin="0,4">
+        <TextBlock Text="{Binding Time, StringFormat='[{0}]'}" Classes="mono muted"
+                   VerticalAlignment="Top" Margin="0,3,10,0" />
+        <Border Grid.Column="1" CornerRadius="4" Padding="6,1" Margin="0,1,10,0"
+                VerticalAlignment="Top" MinWidth="48"
+                Classes.yo="{Binding IsMe}" Classes.otros="{Binding !IsMe}">
+          <TextBlock Text="{Binding SpeakerLabel}" FontSize="12" FontWeight="SemiBold"
+                     HorizontalAlignment="Center" />
+        </Border>
+        <SelectableTextBlock Grid.Column="2" Text="{Binding Text}" TextWrapping="Wrap" />
+      </Grid>
+    </DataTemplate>
+  </Window.Resources>
+
+  <TabControl x:Name="Tabs" Margin="8,4,8,8">
+  <TabItem Header="En vivo">
+  <DockPanel Margin="8,12,8,8">
     <!-- Barra superior: estado + botón -->
     <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
       <StackPanel Spacing="2">
@@ -57,27 +76,82 @@
                    HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="360"
                    IsVisible="{Binding !SegmentCount}" />
         <ScrollViewer x:Name="TranscriptScroll" Padding="14,10">
-          <ItemsControl x:Name="Transcript" ItemsSource="{Binding Lines}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:TranscriptLine">
-                <Grid ColumnDefinitions="Auto,Auto,*" Margin="0,4">
-                  <TextBlock Text="{Binding Time, StringFormat='[{0}]'}" Classes="mono muted"
-                             VerticalAlignment="Top" Margin="0,3,10,0" />
-                  <Border Grid.Column="1" CornerRadius="4" Padding="6,1" Margin="0,1,10,0"
-                          VerticalAlignment="Top" MinWidth="48"
-                          Classes.yo="{Binding IsMe}" Classes.otros="{Binding !IsMe}">
-                    <TextBlock Text="{Binding SpeakerLabel}" FontSize="12" FontWeight="SemiBold"
-                               HorizontalAlignment="Center" />
-                  </Border>
-                  <SelectableTextBlock Grid.Column="2" Text="{Binding Text}" TextWrapping="Wrap" />
-                </Grid>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
+          <ItemsControl x:Name="Transcript" ItemsSource="{Binding Lines}" ItemTemplate="{StaticResource LineTemplate}" />
         </ScrollViewer>
       </Grid>
     </Border>
   </DockPanel>
+  </TabItem>
+
+  <!-- Historial: TODAS las reuniones (micrófono, bot de Meet, subtítulos de la extensión) -->
+  <TabItem Header="Historial">
+    <Grid x:DataType="vm:HistoryViewModel" DataContext="{Binding History}" ColumnDefinitions="300,12,*" Margin="8,12,8,8">
+      <DockPanel>
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+          <TextBox x:Name="HistorySearch" Text="{Binding Query}" Watermark="Buscar en todas (prefijo*, &quot;frase&quot;)" />
+          <Button Grid.Column="1" Content="Buscar" Command="{Binding SearchCommand}" Margin="6,0,0,0" />
+        </Grid>
+        <!-- Resultados de búsqueda (si los hay) -->
+        <ListBox DockPanel.Dock="Top" ItemsSource="{Binding Results}" MaxHeight="200" Margin="0,0,0,8"
+                 IsVisible="{Binding Results.Count}" x:Name="ResultsList">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:SearchResultItem">
+              <StackPanel Spacing="1">
+                <TextBlock Classes="muted" FontSize="11">
+                  <TextBlock.Text>
+                    <MultiBinding StringFormat="{}#{0} {1} · [{2}] {3}">
+                      <Binding Path="MeetingId" /><Binding Path="MeetingTitle" /><Binding Path="Time" /><Binding Path="Speaker" />
+                    </MultiBinding>
+                  </TextBlock.Text>
+                </TextBlock>
+                <TextBlock Text="{Binding Snippet}" TextWrapping="Wrap" FontSize="12" />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <ListBox ItemsSource="{Binding Meetings}" SelectedItem="{Binding Selected}" x:Name="MeetingsList">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:MeetingItem">
+              <StackPanel Spacing="1">
+                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock Classes="muted" FontSize="11">
+                  <TextBlock.Text>
+                    <MultiBinding StringFormat="{}{0} · {1}">
+                      <Binding Path="When" /><Binding Path="Duration" />
+                    </MultiBinding>
+                  </TextBlock.Text>
+                </TextBlock>
+                <TextBlock Classes="muted" FontSize="11">
+                  <TextBlock.Text>
+                    <MultiBinding StringFormat="{}{0} · {1} segmentos">
+                      <Binding Path="Source" /><Binding Path="SegmentCount" />
+                    </MultiBinding>
+                  </TextBlock.Text>
+                </TextBlock>
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+
+      <DockPanel Grid.Column="2">
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,8">
+          <TextBlock Text="{Binding Selected.Title, FallbackValue='Elige una reunión'}" FontSize="16" FontWeight="SemiBold"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <Button Grid.Column="1" Content="Actualizar" Command="{Binding RefreshCommand}" Margin="6,0,0,0" />
+          <Button Grid.Column="2" Content="Exportar .md" Command="{Binding ExportCommand}" Margin="6,0,0,0" />
+        </Grid>
+        <TextBlock DockPanel.Dock="Bottom" Text="{Binding Message}" Classes="muted" FontSize="12" Margin="0,8,0,0"
+                   TextTrimming="CharacterEllipsis" />
+        <Border Classes="card">
+          <ScrollViewer Padding="14,10">
+            <ItemsControl ItemsSource="{Binding Lines}" ItemTemplate="{StaticResource LineTemplate}" />
+          </ScrollViewer>
+        </Border>
+      </DockPanel>
+    </Grid>
+  </TabItem>
+  </TabControl>
 
   <Window.Styles>
     <Style Selector="Border.yo">
