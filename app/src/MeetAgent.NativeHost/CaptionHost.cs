@@ -12,7 +12,8 @@ namespace MeetAgent.NativeHost;
 /// en la misma SQLite que el resto de MeetAgent (búsqueda, export y MCP funcionan igual).
 /// Mensajes: hello · start {meet, title?} · segment {meetingId, speaker, self?, start, end, text} · end {meetingId}.
 /// </summary>
-public sealed class CaptionHost(ITranscriptStore store, Func<DateTimeOffset>? now = null, string? diagPath = null)
+public sealed class CaptionHost(ITranscriptStore store, Func<DateTimeOffset>? now = null, string? diagPath = null,
+    ISpeech? speech = null)
 {
     public const string Version = "0.1.0";
     private readonly Func<DateTimeOffset> _now = now ?? (() => DateTimeOffset.Now);
@@ -38,6 +39,7 @@ public sealed class CaptionHost(ITranscriptStore store, Func<DateTimeOffset>? no
                 "get" => Get(msg),
                 "search" => Search(msg),
                 "export" => ExportMd(msg),
+                "tts" => Tts(msg),
                 var t => Error($"Tipo de mensaje desconocido: {t}"),
             };
         }
@@ -130,6 +132,18 @@ public sealed class CaptionHost(ITranscriptStore store, Func<DateTimeOffset>? no
         if (meeting is null) return Error($"No existe la reunión {id}");
         return Reply(new() { ["type"] = "export", ["ok"] = true, ["filename"] = $"reunion-{id}.md",
             ["markdown"] = MarkdownExporter.Export(meeting, store.GetSegments(id)) });
+    }
+
+    /// <summary>Texto → WAV en base64 para que la extensión lo reproduzca por el micrófono del Meet.</summary>
+    private string Tts(JsonObject m)
+    {
+        if (speech is null) return Error("No hay voz instalada en este equipo");
+        var text = ((string?)m["text"])?.Trim();
+        if (string.IsNullOrEmpty(text)) return Error("Texto vacío");
+        if (text.Length > 600) text = text[..600];   // ~40 s de audio: cabe en el límite de 1 MB
+        var (rate, samples) = speech.Synthesize(text);
+        return Reply(new() { ["type"] = "tts", ["ok"] = true, ["voice"] = speech.Name,
+            ["seconds"] = Math.Round(samples.Length / (double)rate, 2), ["wav"] = Convert.ToBase64String(Wav.Encode(rate, samples)) });
     }
 
     /// <summary>

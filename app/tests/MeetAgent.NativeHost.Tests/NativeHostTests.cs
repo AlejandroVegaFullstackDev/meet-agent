@@ -171,3 +171,47 @@ public class CaptionHostReadTests
         Assert.Contains("Ana Gómez", md);
     }
 }
+
+public class TtsTests
+{
+    private sealed class FakeSpeech : ISpeech
+    {
+        public string? Last;
+        public string Name => "falsa";
+        public (int SampleRate, short[] Samples) Synthesize(string text) { Last = text; return (22050, new short[2205]); }
+    }
+
+    [Fact]
+    public void Tts_devuelve_un_wav_en_base64()
+    {
+        using var store = new SqliteTranscriptStore("Data Source=:memory:");
+        var speech = new FakeSpeech();
+        var host = new CaptionHost(store, speech: speech);
+        var r = JsonDocument.Parse(host.Handle("""{"type":"tts","text":"Hola equipo"}""")).RootElement;
+        Assert.True(r.GetProperty("ok").GetBoolean());
+        Assert.Equal("Hola equipo", speech.Last);
+        var wav = Convert.FromBase64String(r.GetProperty("wav").GetString()!);
+        Assert.Equal("RIFF", Encoding.ASCII.GetString(wav, 0, 4));
+        Assert.Equal(22050, BitConverter.ToInt32(wav, 24));
+        Assert.Equal(44 + 2205 * 2, wav.Length);
+        Assert.Equal(0.1, r.GetProperty("seconds").GetDouble(), 2);
+    }
+
+    [Fact]
+    public void Tts_sin_voz_o_texto_vacio_responde_error()
+    {
+        using var store = new SqliteTranscriptStore("Data Source=:memory:");
+        Assert.False(JsonDocument.Parse(new CaptionHost(store).Handle("""{"type":"tts","text":"hola"}""")).RootElement.GetProperty("ok").GetBoolean());
+        Assert.False(JsonDocument.Parse(new CaptionHost(store, speech: new FakeSpeech()).Handle("""{"type":"tts","text":"  "}""")).RootElement.GetProperty("ok").GetBoolean());
+    }
+
+    [Fact]
+    public void Espeak_real_genera_audio_en_espanol_si_esta_instalado()
+    {
+        if (!EspeakSpeech.IsAvailable) return;   // en Windows / sin libespeak-ng no aplica
+        var (rate, samples) = new EspeakSpeech().Synthesize("Hola, soy MeetAgent.");
+        Assert.True(rate > 8000);
+        Assert.True(samples.Length > rate / 2, $"muy corto: {samples.Length}");
+        Assert.Contains(samples, s => Math.Abs((int)s) > 1000);
+    }
+}

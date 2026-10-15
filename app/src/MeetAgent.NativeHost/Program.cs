@@ -5,7 +5,8 @@ using MeetAgent.Storage.Sqlite;
 // Host de native messaging: el navegador lo lanza al conectar la extensión y le habla por stdin/stdout.
 // stdout es exclusivo del protocolo; cualquier diagnóstico va a stderr (el navegador lo muestra en su log).
 using var store = new SqliteTranscriptStore($"Data Source={AppPaths.Database}");
-var host = new CaptionHost(store, diagPath: Path.Combine(AppPaths.Data, "extension-diag.txt"));
+var host = new CaptionHost(store, diagPath: Path.Combine(AppPaths.Data, "extension-diag.txt"),
+    speech: EspeakSpeech.IsAvailable ? new EspeakSpeech() : null);
 var stdin = Console.OpenStandardInput();
 var stdout = Console.OpenStandardOutput();
 Console.Error.WriteLine($"meetagent-host {CaptionHost.Version} · base {AppPaths.Database}");

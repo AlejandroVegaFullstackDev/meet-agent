@@ -44,6 +44,8 @@
         button{font:inherit;border:0;border-radius:8px;padding:6px 10px;cursor:pointer;background:#2b313a;color:#eef0f3}
         button.primary{background:#7c3aed;color:#fff} button:disabled{opacity:.45;cursor:default}
         .min{margin-left:auto;background:none;color:#9aa3af;padding:0 4px}
+        .say{display:flex;gap:6px;margin-top:8px}
+        .say input{flex:1;min-width:0;font:inherit;border:1px solid #2b313a;border-radius:8px;background:#14171c;color:#eef0f3;padding:6px 8px}
       </style>
       <div class="p">
         <div class="h"><span class="dot"></span>MeetAgent<button class="min" title="Ocultar">–</button></div>
@@ -57,6 +59,10 @@
           <button class="hist" title="Abre todas tus reuniones guardadas">Historial</button>
           <button class="diag" title="Envía a MeetAgent la estructura de la página (sin el texto) para ajustar los selectores">Diagnóstico</button>
         </div>
+        <form class="say" title="La IA habla por tu micrófono en el Meet (voz de prueba)">
+          <input class="saytext" placeholder="Decir… (se escucha en el Meet)" maxlength="600">
+          <button class="saybtn">Hablar</button>
+        </form>
       </div>`;
     const $ = (q) => shadow.querySelector(q);
     $('.go').onclick = start;
@@ -68,6 +74,7 @@
       native({ type: 'diag', text });   // copia local para soporte (data/extension-diag.txt)
       try { (globalThis.browser ?? chrome).runtime.sendMessage({ cmd: 'open-diag', text }); } catch (e) { $('.s').textContent = String(e); }
     };
+    $('.say').onsubmit = (e) => { e.preventDefault(); const t = $('.saytext').value.trim(); if (t) { speak(t); $('.saytext').value = ''; } };
     $('.min').onclick = () => { $('.p').style.display = 'none'; host.title = 'MeetAgent'; };
     let collapsed = false;
     $('.tg').onclick = () => {
@@ -172,6 +179,23 @@
     ui.running(false);
     ui.status(`${message} Reunión #${state.meetingId}: ${state.saved} segmentos.`);
   }
+
+  // ---------- voz: la IA habla por tu micrófono ----------
+  // El host convierte el texto en audio; mic-mixer.js (contexto de la página) lo mezcla en el micrófono de Meet.
+  let sayId = 0;
+  async function speak(text) {
+    ui.status(`Generando voz…`);
+    const r = await native({ type: 'tts', text });
+    if (!r.ok) { ui.status(`No se pudo generar la voz: ${r.error}`); return; }
+    const id = ++sayId;
+    window.postMessage({ source: 'meetagent', type: 'play', id, wav: r.wav }, '*');
+    ui.status(`🔊 Hablando (${r.seconds} s, ${r.voice})…`);
+  }
+  window.addEventListener('message', (ev) => {
+    if (ev.data?.source !== 'meetagent-page') return;
+    if (ev.data.type === 'played') ui.status('Listo: se dijo en el Meet.');
+    if (ev.data.type === 'error') ui.status(`Error al reproducir: ${ev.data.error}. ¿Recargaste la pestaña del Meet?`);
+  });
 
   // Aviso estilo Tactiq: SOLO cuando el usuario pulsa el botón (nunca automático).
   async function postNotice() {

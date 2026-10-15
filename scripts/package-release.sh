@@ -10,7 +10,7 @@ VERSION=$(python3 -c "import json;print(json.load(open('extension/manifest.json'
 OUT=dist/release; rm -rf "$OUT"; mkdir -p "$OUT"
 
 # Extensión: solo lo que se instala (sin pruebas ni notas de desarrollo).
-EXT_FILES=(manifest.json background.js content.js selectors.js assembler.js history.html history.js icons)
+EXT_FILES=(manifest.json background.js content.js selectors.js assembler.js mic-mixer.js history.html history.js icons)
 python3 - "$OUT/meetagent-extension-$VERSION.zip" "${EXT_FILES[@]}" <<'PY'
 import sys, zipfile, os
 out, files = sys.argv[1], sys.argv[2:]
