@@ -1,7 +1,8 @@
 namespace MeetAgent.Core.Ports;
 
 /// <summary>Un fragmento reconocido, con tiempos relativos al inicio del audio entregado.</summary>
-public sealed record RecognizedText(TimeSpan Start, TimeSpan End, string Text);
+/// <param name="Probability">Probabilidad media de los tokens (0-1), si el motor la da.</param>
+public sealed record RecognizedText(TimeSpan Start, TimeSpan End, string Text, double? Probability = null);
 
 public interface ITranscriber : IAsyncDisposable
 {

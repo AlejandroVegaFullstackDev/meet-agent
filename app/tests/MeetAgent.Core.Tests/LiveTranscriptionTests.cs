@@ -108,14 +108,14 @@ public class LiveTranscriptionTests
     }
 
     /// <summary>Devuelve una palabra por segmento, como Whisper con timestamps por palabra.</summary>
-    private sealed class WordTranscriber(string text) : ITranscriber
+    private sealed class WordTranscriber(string text, double? probability = null) : ITranscriber
     {
         public string Name => "palabras";
         public Task<IReadOnlyList<RecognizedText>> TranscribeAsync(float[] samples, CancellationToken ct)
         {
             var words = text.Split(' ');
             return Task.FromResult<IReadOnlyList<RecognizedText>>(words.Select((w, i) =>
-                new RecognizedText(TimeSpan.FromSeconds(1 + i * 0.3), TimeSpan.FromSeconds(1.2 + i * 0.3), w)).ToList());
+                new RecognizedText(TimeSpan.FromSeconds(1 + i * 0.3), TimeSpan.FromSeconds(1.2 + i * 0.3), w, probability)).ToList());
         }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
@@ -127,6 +127,19 @@ public class LiveTranscriptionTests
             new WordTranscriber("[Ruido de la puerta] bueno, sigamos"), new EnergyVad());
         var seg = Assert.Single(await Run(live));
         Assert.Equal("bueno, sigamos", seg.Text);
+    }
+
+    [Fact]
+    public async Task Descarta_texto_con_probabilidad_muy_baja_que_es_lo_que_Whisper_inventa_con_ruido()
+    {
+        // exp(-1,3) ≈ 0,27: por debajo, Vexa y nosotros lo tratamos como alucinación.
+        var noisy = new LiveTranscription([new FakeSource(Speaker.Yo, Loud, Loud, Loud, Loud, Loud)],
+            new WordTranscriber("suerte de la casa", probability: 0.15), new EnergyVad());
+        Assert.Empty(await Run(noisy));
+
+        var clear = new LiveTranscription([new FakeSource(Speaker.Yo, Loud, Loud, Loud, Loud, Loud)],
+            new WordTranscriber("vamos con la agenda", probability: 0.85), new EnergyVad());
+        Assert.Equal("vamos con la agenda", Assert.Single(await Run(clear)).Text);
     }
 
     [Fact]

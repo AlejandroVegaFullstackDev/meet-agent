@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using MeetAgent.Core.Audio;
 using MeetAgent.Core.Ports;
+using MeetAgent.Core.Stt;
 using MeetAgent.Core.Text;
 
 namespace MeetAgent.Core.Pipeline;
@@ -41,6 +42,17 @@ public sealed class LiveTranscription(IReadOnlyList<IAudioSource> sources, ITran
 
     /// <summary>Recibe el audio crudo de cada canal (para grabar a disco solo si hubo consentimiento).</summary>
     public Action<Speaker, short[]>? OnAudio { get; init; }
+
+    /// <summary>
+    /// Mismo criterio que el bot de Vexa: probabilidad media muy baja (lo que Whisper inventa con ruido)
+    /// o texto en bucle. Si el motor no da probabilidades, solo se mira la repetición.
+    /// </summary>
+    private static bool IsLowConfidence(IReadOnlyList<RecognizedText> words, string text)
+    {
+        var probs = words.Where(w => w.Probability is not null).Select(w => Math.Log(Math.Clamp(w.Probability!.Value, 1e-6, 1))).ToList();
+        var avgLogprob = probs.Count > 0 ? probs.Average() : 0;
+        return ConfidenceFilter.IsLowConfidence(avgLogprob, OpenAiTranscription.CompressionRatio(text));
+    }
 
     public async IAsyncEnumerable<TranscriptSegment> RunAsync([EnumeratorCancellation] CancellationToken ct)
     {
@@ -103,7 +115,8 @@ public sealed class LiveTranscription(IReadOnlyList<IAudioSource> sources, ITran
                                  .ToList();
                 // Limpiar sobre el texto unido: con una palabra por segmento, "[Ruido de la puerta]" llega partido.
                 var joined = HallucinationFilter.Clean(string.Join(' ', kept.Select(p => p.Text)));
-                var merged = kept.Count == 0 || HallucinationFilter.IsHallucination(joined) ? "" : merger.Add(joined);
+                var merged = kept.Count == 0 || HallucinationFilter.IsHallucination(joined) || IsLowConfidence(kept, joined)
+                    ? "" : merger.Add(joined);
                 Stats.Add(Stopwatch.GetElapsedTime(w.ReadyTimestamp, done), Stopwatch.GetElapsedTime(started, done),
                     w.Chunk.Samples.Length / (double)AudioFormat.SampleRate);
                 if (merged.Length == 0) continue;
