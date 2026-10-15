@@ -1,0 +1,13 @@
+# Nunca se versionan audios, transcripciones ni modelos
+data/
+models/
+*.wav
+*.bin
+*.db
+*.db-*
+# .NET
+bin/
+obj/
+*.user
+.vs/
+TestResults/

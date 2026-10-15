@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MeetAgent.Audio.Linux/MeetAgent.Audio.Linux.csproj" />
+    <Project Path="src/MeetAgent.Audio.Windows/MeetAgent.Audio.Windows.csproj" />
+    <Project Path="src/MeetAgent.Cli/MeetAgent.Cli.csproj" />
+    <Project Path="src/MeetAgent.Core/MeetAgent.Core.csproj" />
+    <Project Path="src/MeetAgent.Storage.Sqlite/MeetAgent.Storage.Sqlite.csproj" />
+    <Project Path="src/MeetAgent.Stt.Whisper/MeetAgent.Stt.Whisper.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MeetAgent.Core.Tests/MeetAgent.Core.Tests.csproj" />
+  </Folder>
+</Solution>
