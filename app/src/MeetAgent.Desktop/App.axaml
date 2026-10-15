@@ -3,7 +3,13 @@
              x:Class="MeetAgent.Desktop.App"
              RequestedThemeVariant="Default">
   <Application.Styles>
-    <FluentTheme />
+    <FluentTheme>
+      <FluentTheme.Palettes>
+        <!-- Morado de marca (docs/branding) -->
+        <ColorPaletteResources x:Key="Light" Accent="#7C3AED" />
+        <ColorPaletteResources x:Key="Dark" Accent="#8B5CF6" />
+      </FluentTheme.Palettes>
+    </FluentTheme>
     <StyleInclude Source="avares://MeetAgent/Styles.axaml" />
   </Application.Styles>
 </Application>

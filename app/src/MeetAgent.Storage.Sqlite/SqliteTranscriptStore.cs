@@ -96,6 +96,25 @@ public sealed class SqliteTranscriptStore : ITranscriptStore
         return list;
     }
 
+    public IReadOnlyList<StoredSegment> GetSegmentsAfter(long meetingId, long afterId, int limit = 500)
+    {
+        using var cmd = Cmd("""
+            SELECT speaker, start_ms, end_ms, text, id FROM segments
+            WHERE meeting_id = $m AND id > $after ORDER BY id LIMIT $n
+            """, ("$m", meetingId), ("$after", afterId), ("$n", limit));
+        using var r = cmd.ExecuteReader();
+        var list = new List<StoredSegment>();
+        while (r.Read()) list.Add(new StoredSegment(r.GetInt64(4), ReadSegment(r, 0)));
+        return list;
+    }
+
+    public Meeting? GetLatestOpenMeeting()
+    {
+        using var cmd = Cmd("SELECT id, title, started_at, ended_at, consent FROM meetings WHERE ended_at IS NULL ORDER BY started_at DESC, id DESC LIMIT 1");
+        using var r = cmd.ExecuteReader();
+        return r.Read() ? ReadMeeting(r) : null;
+    }
+
     /// <summary>
     /// Sintaxis FTS5 (prefijo*, "frase", AND/OR). Si la consulta no es válida, se reintenta
     /// tratando cada palabra como literal.

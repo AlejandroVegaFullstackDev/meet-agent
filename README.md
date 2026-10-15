@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/branding/icon.svg" width="112" alt="MeetAgent"></p>
+
 # MeetAgent
 
 Transcribe tus reuniones **en tu propio equipo**: escucha tu micrófono (**Yo**) y el audio del sistema (**Otros**), y escribe en vivo `[hh:mm:ss] [Yo|Otros] texto`. Antes de cada reunión pregunta si quieres grabar el audio. Nada sale de tu computador.

@@ -8,8 +8,8 @@
           <SolidColorBrush x:Key="CardBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="BorderSubtleBrush" Color="#E3E6EA" />
           <SolidColorBrush x:Key="MutedBrush" Color="#6B7280" />
-          <SolidColorBrush x:Key="YoBrush" Color="#2563EB" />
-          <SolidColorBrush x:Key="YoSoftBrush" Color="#E8EFFE" />
+          <SolidColorBrush x:Key="YoBrush" Color="#6D28D9" />
+          <SolidColorBrush x:Key="YoSoftBrush" Color="#EFE7FD" />
           <SolidColorBrush x:Key="OtrosBrush" Color="#B45309" />
           <SolidColorBrush x:Key="OtrosSoftBrush" Color="#FDF1E3" />
           <SolidColorBrush x:Key="LiveBrush" Color="#DC2626" />
@@ -20,8 +20,8 @@
           <SolidColorBrush x:Key="CardBrush" Color="#1C2027" />
           <SolidColorBrush x:Key="BorderSubtleBrush" Color="#2B313A" />
           <SolidColorBrush x:Key="MutedBrush" Color="#9AA3AF" />
-          <SolidColorBrush x:Key="YoBrush" Color="#7AA7FF" />
-          <SolidColorBrush x:Key="YoSoftBrush" Color="#1E2A44" />
+          <SolidColorBrush x:Key="YoBrush" Color="#C4B5FD" />
+          <SolidColorBrush x:Key="YoSoftBrush" Color="#2E1F4D" />
           <SolidColorBrush x:Key="OtrosBrush" Color="#F2B36B" />
           <SolidColorBrush x:Key="OtrosSoftBrush" Color="#3A2A17" />
           <SolidColorBrush x:Key="LiveBrush" Color="#F87171" />

@@ -70,6 +70,8 @@ public class MeetingSessionTests
         public IReadOnlyList<Meeting> ListMeetings() => [];
         public IReadOnlyList<TranscriptSegment> GetSegments(long meetingId) => [];
         public IReadOnlyList<SearchHit> Search(string query, int limit = 20) => [];
+        public IReadOnlyList<StoredSegment> GetSegmentsAfter(long meetingId, long afterId, int limit = 500) => [];
+        public Meeting? GetLatestOpenMeeting() => null;
         public void Dispose() { }
     }
 

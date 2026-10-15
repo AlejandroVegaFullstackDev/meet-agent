@@ -75,6 +75,35 @@ public class SqliteTranscriptStoreTests
     }
 
     [Fact]
+    public void Segmentos_despues_de_un_cursor_para_leer_en_vivo()
+    {
+        using var store = NewStore();
+        var id = store.StartMeeting("en vivo", T0, "transcribir");
+        store.AddSegment(id, S(Speaker.Otros, 0, "uno"));
+        store.AddSegment(id, S(Speaker.Yo, 4, "dos"));
+        var first = store.GetSegmentsAfter(id, afterId: 0);
+        Assert.Equal(new[] { "uno", "dos" }, first.Select(s => s.Segment.Text));
+        Assert.True(first[1].Id > first[0].Id);
+
+        store.AddSegment(id, S(Speaker.Otros, 8, "tres"));
+        var next = store.GetSegmentsAfter(id, afterId: first[^1].Id);
+        Assert.Equal("tres", Assert.Single(next).Segment.Text);
+        Assert.Empty(store.GetSegmentsAfter(id, afterId: next[0].Id));
+    }
+
+    [Fact]
+    public void La_reunion_abierta_es_la_mas_reciente_sin_fin()
+    {
+        using var store = NewStore();
+        Assert.Null(store.GetLatestOpenMeeting());
+        var a = store.StartMeeting("cerrada", T0, "transcribir");
+        store.EndMeeting(a, T0.AddMinutes(5));
+        Assert.Null(store.GetLatestOpenMeeting());
+        var b = store.StartMeeting("abierta", T0.AddHours(1), "transcribir");
+        Assert.Equal(b, store.GetLatestOpenMeeting()!.Id);
+    }
+
+    [Fact]
     public void Persiste_en_archivo_entre_aperturas()
     {
         var path = Path.Combine(Path.GetTempPath(), $"meetagent-test-{Guid.NewGuid():N}.db");

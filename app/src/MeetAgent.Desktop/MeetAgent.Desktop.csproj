@@ -28,6 +28,7 @@
     <ProjectReference Include="..\MeetAgent.Audio.Windows\MeetAgent.Audio.Windows.csproj" />
     <ProjectReference Include="..\MeetAgent.Stt.Whisper\MeetAgent.Stt.Whisper.csproj" />
     <ProjectReference Include="..\MeetAgent.Storage.Sqlite\MeetAgent.Storage.Sqlite.csproj" />
+    <ProjectReference Include="..\MeetAgent.Control\MeetAgent.Control.csproj" />
   </ItemGroup>
 
 </Project>
