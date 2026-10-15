@@ -11,4 +11,8 @@
     <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\MeetAgent.Core\MeetAgent.Core.csproj" />
+  </ItemGroup>
+
 </Project>

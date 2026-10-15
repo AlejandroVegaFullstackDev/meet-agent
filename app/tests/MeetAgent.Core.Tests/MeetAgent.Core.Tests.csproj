@@ -18,4 +18,8 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MeetAgent.Core\MeetAgent.Core.csproj" />
+  </ItemGroup>
+
 </Project>
