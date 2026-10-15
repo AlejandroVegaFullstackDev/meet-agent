@@ -7,3 +7,5 @@
 - **Logrado:** H2: `live` con 2 canales, un modelo y VAD. small 5/1: RAM 752 MB, CPU 21 %, latencia p50 1,4 s. Medium no sostiene el tiempo real. `audio_ctx` reducido hace al encoder 4,7× más rápido. Alineación del solape por tiempo y por texto. 60 pruebas en verde.
 - **Logrado:** H3: `bench` con WER S/D/I por modelo y modo; resultados preliminares con voz sintética.
 - **Sigue:** Desktop (Avalonia) y H4 (SQLite + FTS5 + export). Pendiente de Alejandro: aceptación de H1 con sonido y cambio a audífonos, referencia real de 5 min para H3, y decisión sobre el VAD Silero.
+- **Logrado:** H4: SQLite + FTS5 (sin tildes, prefijo, frase, bm25), `meetings`, `search` y `export` a Markdown. 71 pruebas.
+- **Sigue:** Desktop (Avalonia): bandeja, consentimiento y vista en vivo.

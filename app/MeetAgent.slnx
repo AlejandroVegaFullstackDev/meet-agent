@@ -9,5 +9,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MeetAgent.Core.Tests/MeetAgent.Core.Tests.csproj" />
+    <Project Path="tests/MeetAgent.Storage.Sqlite.Tests/MeetAgent.Storage.Sqlite.Tests.csproj" />
   </Folder>
 </Solution>

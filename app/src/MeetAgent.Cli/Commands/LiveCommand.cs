@@ -54,13 +54,19 @@ public static class LiveCommand
             OnAudio = recorders is null ? null : (sp, block) => { lock (recorders) recorders[sp].Write(block); },
         };
         var transcript = new List<TranscriptSegment>();
+        using var store = args.Has("no-store") ? null : Store.Open();
+        var meetingId = store?.StartMeeting(args.Get("title", $"Reunión {DateTime.Now:yyyy-MM-dd HH:mm}"), DateTimeOffset.Now,
+            recorders is null ? "transcribir" : "grabar");
+        if (meetingId is not null) Log.Info($"Reunión #{meetingId} en {Store.DbPath}");
         var pipelineStart = monitor.Elapsed;
         await foreach (var seg in live.RunAsync(cts.Token))
         {
             transcript.Add(seg);
+            if (meetingId is { } mid) store!.AddSegment(mid, seg);
             Console.WriteLine($"[{TimeFormat.Hms(seg.Start)}] [{seg.Speaker}] {seg.Text}");
         }
         var wall = monitor.Elapsed - pipelineStart;
+        if (meetingId is { } done) store!.EndMeeting(done, DateTimeOffset.Now);
         foreach (var r in recorders?.Values ?? Enumerable.Empty<WavWriter>()) r.Dispose();
         foreach (var s in sources) await s.DisposeAsync();
 
