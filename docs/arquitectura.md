@@ -17,4 +17,6 @@ Hexagonal: el núcleo (`MeetAgent.Core`) define puertos y lógica pura; los adap
 - Dos canales: `Yo` (micrófono) y `Otros` (loopback de la salida por defecto).
 - Un solo modelo Whisper, compartido por ambos canales a través de una cola.
 
+Despliegue: local primero (ADR-0008).
+
 Decisiones: ver `docs/adr/`.
