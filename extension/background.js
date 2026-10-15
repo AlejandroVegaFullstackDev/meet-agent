@@ -51,3 +51,10 @@ api.tabs?.onRemoved?.addListener((tabId) => {
 
 // Ícono de la barra: abre el historial (no hace falta estar en un Meet).
 api.action?.onClicked?.addListener(() => api.tabs.create({ url: api.runtime.getURL('history.html') }));
+
+// Al recargar o navegar la pestaña del Meet, se abre un conector nuevo (así siempre se usa la versión instalada).
+api.tabs?.onUpdated?.addListener((tabId, info) => {
+  if (info.status !== 'loading') return;
+  ports.get(tabId)?.port.disconnect();
+  ports.delete(tabId);
+});
