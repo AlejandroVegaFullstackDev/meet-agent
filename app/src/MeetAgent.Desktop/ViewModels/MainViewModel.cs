@@ -7,6 +7,9 @@ using MeetAgent.Core.Text;
 
 namespace MeetAgent.Desktop.ViewModels;
 
+/// <summary>Resultado de un inicio pedido por un agente: lo que eligió el usuario en el diálogo.</summary>
+public sealed record AgentStartResult(Consent Consent, long? MeetingId, bool AlreadyRunning);
+
 public sealed record TranscriptLine(string Time, Speaker Speaker, string Text)
 {
     public string SpeakerLabel => Speaker.ToString();
@@ -76,16 +79,35 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task ToggleAsync()
     {
         if (IsRunning) await StopAsync();
-        else await StartAsync();
+        else await StartAsync(null);
     }
 
-    private async Task StartAsync()
+    /// <summary>
+    /// Inicio pedido por un agente (MCP). Muestra el mismo diálogo de consentimiento que el botón;
+    /// el agente solo se entera de lo que el usuario eligió.
+    /// </summary>
+    public async Task<AgentStartResult> StartFromAgentAsync(string? title)
+    {
+        if (IsRunning || IsBusy) return new AgentStartResult(Consent, _session.MeetingId, AlreadyRunning: true);
+        var consent = await StartAsync(title);
+        return new AgentStartResult(consent, IsRunning ? _session.MeetingId : null, AlreadyRunning: false);
+    }
+
+    /// <returns>false si no había reunión en curso.</returns>
+    public async Task<bool> StopFromAgentAsync()
+    {
+        if (!IsRunning) return false;
+        await StopAsync();
+        return true;
+    }
+
+    private async Task<Consent> StartAsync(string? requestedTitle)
     {
         var consent = await _askConsent();
         if (consent == Consent.None)
         {
             LastLog = "No se inició: elegiste «Nada».";
-            return;
+            return Consent.None;
         }
         IsBusy = true;
         try
@@ -93,8 +115,8 @@ public sealed partial class MainViewModel : ObservableObject
             Lines.Clear();
             OnPropertyChanged(nameof(SegmentCount));
             Consent = consent;
-            var title = $"Reunión {_now():yyyy-MM-dd HH:mm}";
-            if (!await _session.StartAsync(consent, title)) return;
+            var title = string.IsNullOrWhiteSpace(requestedTitle) ? $"Reunión {_now():yyyy-MM-dd HH:mm}" : requestedTitle.Trim();
+            if (!await _session.StartAsync(consent, title)) return Consent.None;
             _startedAt = _now();
             IsRunning = true;
             LastLog = $"Reunión #{_session.MeetingId} iniciada";
@@ -105,11 +127,13 @@ public sealed partial class MainViewModel : ObservableObject
         {
             LastLog = $"No se pudo iniciar: {ex.Message}";
             Consent = Consent.None;
+            return Consent.None;
         }
         finally
         {
             IsBusy = false;
         }
+        return consent;
     }
 
     private async Task StopAsync()

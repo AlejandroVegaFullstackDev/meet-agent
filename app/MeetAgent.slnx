@@ -14,6 +14,7 @@
     <Project Path="tests/MeetAgent.Control.Tests/MeetAgent.Control.Tests.csproj" />
     <Project Path="tests/MeetAgent.Core.Tests/MeetAgent.Core.Tests.csproj" />
     <Project Path="tests/MeetAgent.Desktop.Tests/MeetAgent.Desktop.Tests.csproj" />
+    <Project Path="tests/MeetAgent.Mcp.Tests/MeetAgent.Mcp.Tests.csproj" />
     <Project Path="tests/MeetAgent.Storage.Sqlite.Tests/MeetAgent.Storage.Sqlite.Tests.csproj" />
   </Folder>
 </Solution>

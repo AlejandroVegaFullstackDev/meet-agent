@@ -26,5 +26,7 @@ internal static class ControlJson
 public static class ControlEndpoint
 {
     /// <summary>Un canal por usuario del sistema; en Linux es un socket Unix, en Windows una named pipe.</summary>
-    public static string DefaultName => $"meetagent-control-{Environment.UserName}";
+    /// <remarks><c>MEETAGENT_CONTROL</c> permite otro nombre (pruebas, varias instancias).</remarks>
+    public static string DefaultName =>
+        Environment.GetEnvironmentVariable("MEETAGENT_CONTROL") is { Length: > 0 } n ? n : $"meetagent-control-{Environment.UserName}";
 }

@@ -6,6 +6,8 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using MeetAgent.Control;
+using MeetAgent.Core;
 using MeetAgent.Desktop.Services;
 using MeetAgent.Desktop.ViewModels;
 using MeetAgent.Desktop.Views;
@@ -20,6 +22,7 @@ public sealed class App : Application
     private TrayIcon? _tray;
     private NativeMenuItem? _trayToggle;
     private WindowIcon? _idleIcon, _liveIcon;
+    private ControlServer? _control;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -41,7 +44,12 @@ public sealed class App : Application
             _liveIcon = LoadIcon("live.png");
             _window.Icon = _idleIcon;
             CreateTray();
-            desktop.Exit += (_, _) => _services.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            StartControlServer();
+            desktop.Exit += (_, _) =>
+            {
+                _control?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                _services.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            };
             if (!Program.Args.Contains("--minimized")) _window.Show();
         }
         base.OnFrameworkInitializationCompleted();
@@ -64,6 +72,44 @@ public sealed class App : Application
         };
         _tray.Clicked += (_, _) => ShowWindow();
         TrayIcon.SetIcons(this, new TrayIcons { _tray });
+    }
+
+    /// <summary>
+    /// Canal local para agentes (MeetAgent.Mcp). Empezar siempre abre el diálogo de consentimiento:
+    /// el agente no puede elegir grabar, solo se entera de lo que el usuario decidió.
+    /// </summary>
+    private void StartControlServer()
+    {
+        try
+        {
+            _control = ControlServer.Start(ControlEndpoint.DefaultName, async req =>
+            {
+                var vm = _vm!;
+                switch (req.Command)
+                {
+                    case ControlCommand.Start:
+                        var r = await Dispatcher.UIThread.InvokeAsync(() => vm.StartFromAgentAsync(req.Title));
+                        if (r.AlreadyRunning)
+                            return new ControlResponse(true, true, r.MeetingId, vm.Consent.ToStoreValue(), "Ya hay una reunión en curso.");
+                        return r.Consent == Consent.None
+                            ? new ControlResponse(true, false, null, "nada", "El usuario eligió «Nada»: no se inició la reunión.")
+                            : new ControlResponse(true, true, r.MeetingId, r.Consent.ToStoreValue(),
+                                r.Consent == Consent.RecordAndTranscribe ? "El usuario eligió grabar y transcribir." : "El usuario eligió solo transcribir (el audio no se guarda).");
+                    case ControlCommand.Stop:
+                        var stopped = await Dispatcher.UIThread.InvokeAsync(vm.StopFromAgentAsync);
+                        return new ControlResponse(true, false, _services!.Session.MeetingId, null,
+                            stopped ? "Reunión terminada y guardada." : "No había una reunión en curso.");
+                    default:
+                        return await Dispatcher.UIThread.InvokeAsync(() => new ControlResponse(true, vm.IsRunning,
+                            vm.IsRunning ? _services!.Session.MeetingId : null, vm.IsRunning ? vm.Consent.ToStoreValue() : null,
+                            $"{vm.StatusText} · transcriptor {vm.TranscriberName}"));
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"MeetAgent · canal de control no disponible: {ex.Message}");
+        }
     }
 
     private void OnVmChanged(object? sender, PropertyChangedEventArgs e)

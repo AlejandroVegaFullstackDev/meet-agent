@@ -61,6 +61,42 @@ public class MainViewModelTests
         Assert.Equal(["grabar"], store.Consents);
     }
 
+    [AvaloniaFact]
+    public async Task Un_agente_pide_empezar_y_el_usuario_decide_en_el_dialogo()
+    {
+        var (store, rec) = (new Fakes.Store(), new Fakes.Recorders());
+        int asked = 0;
+        var vm = new MainViewModel(Fakes.Session(store, rec, seconds: 30), "falso",
+            () => { asked++; return Task.FromResult(Consent.TranscribeOnly); }, ui: a => Dispatcher.UIThread.Post(a));
+
+        var r = await vm.StartFromAgentAsync("Daily del equipo");
+        Assert.Equal(1, asked);                      // siempre pasa por el diálogo
+        Assert.Equal(Consent.TranscribeOnly, r.Consent);
+        Assert.NotNull(r.MeetingId);
+        Assert.True(vm.IsRunning);
+        Assert.Equal(0, rec.Opened);
+
+        var again = await vm.StartFromAgentAsync("otra");
+        Assert.Equal(1, asked);                      // ya en curso: no vuelve a preguntar ni arranca otra
+        Assert.True(again.AlreadyRunning);
+
+        Assert.True(await vm.StopFromAgentAsync());
+        Assert.False(vm.IsRunning);
+        Assert.False(await vm.StopFromAgentAsync()); // nada que terminar
+    }
+
+    [AvaloniaFact]
+    public async Task Si_el_usuario_elige_Nada_el_agente_se_entera_y_no_arranca()
+    {
+        var (store, rec) = (new Fakes.Store(), new Fakes.Recorders());
+        var vm = new MainViewModel(Fakes.Session(store, rec), "falso", () => Task.FromResult(Consent.None));
+        var r = await vm.StartFromAgentAsync(null);
+        Assert.Equal(Consent.None, r.Consent);
+        Assert.Null(r.MeetingId);
+        Assert.False(vm.IsRunning);
+        Assert.Empty(store.Consents);
+    }
+
     internal static async Task WaitUntil(Func<bool> condition, int timeoutMs = 10000)
     {
         var until = DateTime.UtcNow.AddMilliseconds(timeoutMs);

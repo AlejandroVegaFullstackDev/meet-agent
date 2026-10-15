@@ -17,7 +17,7 @@ Windows y Linux · C# / .NET 10 · Whisper (whisper.cpp) en CPU · Avalonia · S
 
 ## Usarlo
 1. Descarga un modelo en `models/` (por ejemplo `ggml-small-q5_1.bin` de [huggingface.co/ggerganov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp)).
-2. App de escritorio: `scripts/publish.sh` genera `dist/linux-x64/MeetAgent` y `dist/win-x64/MeetAgent.exe`, que no requieren .NET instalado. Busca `models/` subiendo desde su carpeta; si no lo encuentra, usa `~/.local/share/MeetAgent/` en Linux o `%LOCALAPPDATA%\MeetAgent\` en Windows (o `MEETAGENT_HOME`).
+2. App de escritorio: `scripts/publish.sh` genera `dist/linux-x64/MeetAgent` y `dist/win-x64/MeetAgent.exe` (más `meetagent-mcp`), que no requieren .NET instalado. Busca `models/` subiendo desde su carpeta; si no lo encuentra, usa `~/.local/share/MeetAgent/` en Linux o `%LOCALAPPDATA%\MeetAgent\` en Windows (o `MEETAGENT_HOME`).
 3. CLI (desde `app/`):
    ```
    dotnet run --project src/MeetAgent.Cli -- live --model small-q5_1
@@ -25,9 +25,16 @@ Windows y Linux · C# / .NET 10 · Whisper (whisper.cpp) en CPU · Avalonia · S
    dotnet run --project src/MeetAgent.Cli -- export
    ```
 
+## Con tu IA (MCP)
+`meetagent-mcp` expone tus reuniones a Claude Code, opencode, Codex o cualquier cliente MCP: listar, leer, buscar, leer en vivo, y empezar o terminar (siempre con el consentimiento en la app). Configuración y ejemplos en [docs/mcp.md](docs/mcp.md); plan B por CLI en [AGENTS.md](AGENTS.md).
+
+```bash
+claude mcp add meetagent -- /ruta/a/meet-agent/dist/linux-x64/meetagent-mcp
+```
+
 ## Estructura
 ```
-app/      solución .NET: Core, Audio.Windows, Audio.Linux, Stt.Whisper, Storage.Sqlite, Cli, Desktop + tests
+app/      solución .NET: Core, Audio.Windows, Audio.Linux, Stt.Whisper, Storage.Sqlite, Control, Mcp, Cli, Desktop + tests
 docs/     arquitectura, plan y ADRs
 logros/   resultados por hito con números, y bitácora
 ```

@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace MeetAgent.Control;
 
-public sealed class ControlClient(string? name = null)
+public sealed class ControlClient(string? name = null) : IAppControl
 {
     private readonly string _name = name ?? ControlEndpoint.DefaultName;
 

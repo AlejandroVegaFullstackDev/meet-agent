@@ -1,5 +1,6 @@
 using MeetAgent.Audio.Linux;
 using MeetAgent.Audio.Windows;
+using MeetAgent.Core;
 using MeetAgent.Core.Audio;
 using MeetAgent.Core.Pipeline;
 using MeetAgent.Core.Ports;
@@ -22,8 +23,8 @@ public sealed class AppServices : IAsyncDisposable
     public ITranscriptStore Store { get; }
     public MeetingSession Session { get; }
 
-    public static string Root { get; } = FindRoot();
-    public static string DataDir => Directory.CreateDirectory(Path.Combine(Root, "data")).FullName;
+    public static string Root => AppPaths.Root;
+    public static string DataDir => AppPaths.Data;
 
     /// <summary>
     /// <c>--fake</c> fuerza el transcriptor falso; <c>--model medium-q5_0</c> cambia de modelo.
@@ -36,7 +37,7 @@ public sealed class AppServices : IAsyncDisposable
             : throw new PlatformNotSupportedException("Solo Windows y Linux.");
 
         var modelName = ArgValue(args, "--model") ?? "small-q5_1";
-        var modelPath = Path.Combine(Root, "models", $"ggml-{modelName}.bin");
+        var modelPath = AppPaths.Model(modelName);
         ITranscriber transcriber;
         if (args.Contains("--fake")) transcriber = new FakeTranscriber();
         else if (!File.Exists(modelPath)) transcriber = new FakeTranscriber(reason: $"no está {modelPath}");
@@ -47,7 +48,7 @@ public sealed class AppServices : IAsyncDisposable
             catch (Exception ex) { transcriber = new FakeTranscriber(reason: $"Whisper no cargó: {ex.Message}"); }
         }
 
-        var store = new SqliteTranscriptStore($"Data Source={Path.Combine(DataDir, "meetagent.db")}");
+        var store = new SqliteTranscriptStore($"Data Source={AppPaths.Database}");
         var recordings = new WavRecordingSinkFactory(Path.Combine(DataDir, "recordings"));
         var session = new MeetingSession(sources, transcriber, new EnergyVad(), store, recordings);
         return new AppServices(transcriber, store, session);
@@ -59,14 +60,6 @@ public sealed class AppServices : IAsyncDisposable
         return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
     }
 
-    private static string FindRoot()
-    {
-        if (Environment.GetEnvironmentVariable("MEETAGENT_HOME") is { Length: > 0 } env) return env;
-        foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
-            for (var d = new DirectoryInfo(start); d != null; d = d.Parent)
-                if (Directory.Exists(Path.Combine(d.FullName, "models"))) return d.FullName;
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MeetAgent");
-    }
 
     public async ValueTask DisposeAsync()
     {
