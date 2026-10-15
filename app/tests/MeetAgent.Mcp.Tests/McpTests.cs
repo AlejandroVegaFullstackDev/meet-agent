@@ -125,7 +125,7 @@ public class StdioIntegrationTests
         Path.Combine(AppContext.BaseDirectory, "meetagent-mcp.dll");
 
     [Fact]
-    public async Task Expone_las_siete_herramientas_y_el_inicio_pasa_por_la_app()
+    public async Task Expone_las_nueve_herramientas_y_el_inicio_pasa_por_la_app()
     {
         using var home = new TempHome();
         using (var s = home.Open()) s.StartMeeting("previa", DateTimeOffset.Now.AddHours(-1), "transcribir");
@@ -148,7 +148,7 @@ public class StdioIntegrationTests
 
         var tools = await client.ListToolsAsync();
         Assert.Equal(
-            ["buscar", "empezar_reunion", "estado", "leer_transcripcion", "listar_reuniones", "terminar_reunion", "transcripcion_en_vivo"],
+            ["buscar", "decir", "empezar_reunion", "esperar_novedades", "estado", "leer_transcripcion", "listar_reuniones", "terminar_reunion", "transcripcion_en_vivo"],
             tools.Select(t => t.Name).Order());
         // Ninguna herramienta acepta un parámetro para grabar o fijar el consentimiento.
         Assert.All(tools, t => Assert.DoesNotMatch("(?i)grabar|record|consent", t.JsonSchema.GetRawText()));
@@ -160,5 +160,70 @@ public class StdioIntegrationTests
 
         var list = await client.CallToolAsync("listar_reuniones", new Dictionary<string, object?>());
         Assert.Contains("previa", string.Join("", list.Content.OfType<TextContentBlock>().Select(c => c.Text)));
+    }
+}
+
+public class VoiceAndWaitToolsTests
+{
+    private static readonly DateTimeOffset T0 = new(2026, 10, 15, 9, 0, 0, TimeSpan.FromHours(-5));
+
+    [Fact]
+    public async Task Decir_manda_el_texto_al_Meet_y_avisa_si_no_hay_Meet_abierto()
+    {
+        using var home = new TempHome();
+        string? said = null;
+        var tools = new MeetingTools(home.Open, new FakeApp(_ => null),
+            say: (t, _) => { said = t; return Task.FromResult<System.Text.Json.JsonElement?>(System.Text.Json.JsonDocument.Parse("""{"ok":true,"seconds":2.5}""").RootElement); });
+        var r = await tools.SayAsync("Decidimos el presupuesto", default);
+        Assert.Equal("Decidimos el presupuesto", said);
+        Assert.Contains("2.5", r.Replace(',', '.'));
+
+        var none = new MeetingTools(home.Open, new FakeApp(_ => null), say: (_, _) => Task.FromResult<System.Text.Json.JsonElement?>(null));
+        Assert.Contains("Transcribir", await none.SayAsync("hola", default));
+    }
+
+    [Fact]
+    public async Task Esperar_novedades_vuelve_en_cuanto_llega_texto_nuevo()
+    {
+        using var home = new TempHome();
+        long id;
+        using (var s = home.Open()) id = s.StartMeeting("Meet", T0, "subtitulos");
+        var tools = new MeetingTools(home.Open, new FakeApp(_ => null));
+        var wait = tools.WaitAsync(0, 10, null, default);
+        await Task.Delay(300);
+        using (var s = home.Open()) s.AddSegment(id, new TranscriptSegment(Speaker.Otros, TimeSpan.Zero, TimeSpan.FromSeconds(2), "Hola a todos", "Ana"));
+        var r = await wait.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Contains("[Ana] Hola a todos", r);
+        Assert.Contains("siguiente desde_id", r);
+    }
+
+    [Fact]
+    public async Task Con_palabra_clave_solo_vuelve_cuando_nombran_al_asistente()
+    {
+        using var home = new TempHome();
+        long id;
+        using (var s = home.Open()) id = s.StartMeeting("Meet", T0, "subtitulos");
+        var tools = new MeetingTools(home.Open, new FakeApp(_ => null));
+        var wait = tools.WaitAsync(0, 10, "meetagent", default);
+        using (var s = home.Open()) s.AddSegment(id, new TranscriptSegment(Speaker.Otros, TimeSpan.Zero, TimeSpan.FromSeconds(2), "Sigamos con el sprint", "Ana"));
+        await Task.Delay(1500);
+        Assert.False(wait.IsCompleted);
+        using (var s = home.Open()) s.AddSegment(id, new TranscriptSegment(Speaker.Otros, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(5), "Meet Agent, ¿qué decidimos?", "Ana"));
+        var r = await wait.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Contains("te nombraron", r);
+        Assert.Contains("¿qué decidimos?", r);
+        Assert.Contains("Sigamos con el sprint", r);       // incluye el contexto previo
+    }
+
+    [Fact]
+    public async Task Esperar_sin_novedades_vuelve_al_cumplirse_el_tiempo()
+    {
+        using var home = new TempHome();
+        using (var s = home.Open()) s.StartMeeting("Meet", T0, "subtitulos");
+        var tools = new MeetingTools(home.Open, new FakeApp(_ => null));
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var r = await tools.WaitAsync(0, 2, null, default);
+        Assert.InRange(sw.Elapsed.TotalSeconds, 1.5, 6);
+        Assert.Contains("sin novedades", r);
     }
 }

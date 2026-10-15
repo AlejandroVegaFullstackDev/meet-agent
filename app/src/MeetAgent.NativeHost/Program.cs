@@ -10,15 +10,30 @@ var host = new CaptionHost(store, diagPath: Path.Combine(AppPaths.Data, "extensi
 var stdin = Console.OpenStandardInput();
 var stdout = Console.OpenStandardOutput();
 Console.Error.WriteLine($"meetagent-host {CaptionHost.Version} · base {AppPaths.Database}");
+// stdout lo comparten las respuestas y los mensajes del canal de voz: se escribe de a uno.
+var writeLock = new SemaphoreSlim(1, 1);
+async Task SendAsync(string json)
+{
+    await writeLock.WaitAsync();
+    try { await NativeMessaging.WriteAsync(stdout, json); }
+    finally { writeLock.Release(); }
+}
+VoiceChannel? voice = null;
 try
 {
     while (await NativeMessaging.ReadAsync(stdin) is { } json)
     {
         var reply = host.Handle(json);
+        // La pestaña de Meet pidió voz: este conector atiende el canal (si otro Meet ya lo tiene, se avisa).
+        if (host.VoiceRequested && voice is null)
+        {
+            try { voice = VoiceChannel.Start(MeetAgent.Control.VoiceClient.DefaultName, host, SendAsync); }
+            catch (IOException ex) { Console.Error.WriteLine($"meetagent-host: canal de voz ocupado ({ex.Message})"); }
+        }
         // El navegador no acepta mensajes del host de más de 1 MB: mejor un error claro que cerrar el puerto.
         if (System.Text.Encoding.UTF8.GetByteCount(reply) > NativeMessaging.MaxMessageBytes)
             reply = """{"type":"error","ok":false,"error":"Respuesta demasiado grande (más de 1 MB): exporta la reunión desde la CLI."}""";
-        await NativeMessaging.WriteAsync(stdout, reply);
+        await SendAsync(reply);
     }
 }
 catch (Exception ex) when (ex is IOException or InvalidDataException)
@@ -28,4 +43,5 @@ catch (Exception ex) when (ex is IOException or InvalidDataException)
 finally
 {
     host.CloseAll();
+    if (voice is not null) await voice.DisposeAsync();
 }

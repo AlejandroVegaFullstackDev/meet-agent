@@ -19,7 +19,33 @@ public sealed class CaptionHost(ITranscriptStore store, Func<DateTimeOffset>? no
     private readonly Func<DateTimeOffset> _now = now ?? (() => DateTimeOffset.Now);
     private readonly HashSet<long> _open = new();
 
+    /// <summary>La pestaña de Meet pidió el canal de voz (para que la IA hable por el micrófono).</summary>
+    public bool VoiceRequested { get; private set; }
+
+    /// <summary>Procesa un mensaje de la extensión. La respuesta repite el <c>rid</c> para emparejarla con su pedido.</summary>
     public string Handle(string json)
+    {
+        var reply = HandleCore(json);
+        JsonNode? rid = null;
+        try { rid = (JsonNode.Parse(json) as JsonObject)?["rid"]?.DeepClone(); } catch (JsonException) { }
+        if (rid is null) return reply;
+        var obj = JsonNode.Parse(reply)!.AsObject();
+        obj["rid"] = rid;
+        return obj.ToJsonString();
+    }
+
+    /// <summary>Mensaje no pedido {type:"play"} con la voz de <paramref name="text"/>, o null si no hay voz.</summary>
+    public string? PlayMessage(string text)
+    {
+        if (speech is null || string.IsNullOrWhiteSpace(text)) return null;
+        var t = text.Trim();
+        if (t.Length > 600) t = t[..600];
+        var (rate, samples) = speech.Synthesize(t);
+        return new JsonObject { ["type"] = "play", ["text"] = t, ["voice"] = speech.Name,
+            ["seconds"] = Math.Round(samples.Length / (double)rate, 2), ["wav"] = Convert.ToBase64String(Wav.Encode(rate, samples)) }.ToJsonString();
+    }
+
+    private string HandleCore(string json)
     {
         JsonObject? msg;
         try { msg = JsonNode.Parse(json) as JsonObject; }
@@ -40,6 +66,7 @@ public sealed class CaptionHost(ITranscriptStore store, Func<DateTimeOffset>? no
                 "search" => Search(msg),
                 "export" => ExportMd(msg),
                 "tts" => Tts(msg),
+                "voice-on" => VoiceOn(),
                 var t => Error($"Tipo de mensaje desconocido: {t}"),
             };
         }
@@ -132,6 +159,12 @@ public sealed class CaptionHost(ITranscriptStore store, Func<DateTimeOffset>? no
         if (meeting is null) return Error($"No existe la reunión {id}");
         return Reply(new() { ["type"] = "export", ["ok"] = true, ["filename"] = $"reunion-{id}.md",
             ["markdown"] = MarkdownExporter.Export(meeting, store.GetSegments(id)) });
+    }
+
+    private string VoiceOn()
+    {
+        VoiceRequested = true;
+        return Reply(new() { ["type"] = "voice", ["ok"] = speech is not null, ["voice"] = speech?.Name });
     }
 
     /// <summary>Texto → WAV en base64 para que la extensión lo reproduzca por el micrófono del Meet.</summary>

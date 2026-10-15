@@ -167,7 +167,20 @@
 
   const round = (x) => Math.round(x * 10) / 10;
 
-  const api = { mergeCaption, CaptionAssembler };
+  /**
+   * La voz de la IA sale por el micrófono del usuario, así que Meet la transcribe como «Tú».
+   * Si un segmento propio cae en su mayoría dentro de un intervalo en que habló la IA, se marca como de ella.
+   * @param {{start:number,end:number}[]} agentIntervals  segundos desde el inicio, como los segmentos
+   */
+  function markAgentSpeech(seg, agentIntervals, margin = 1.5) {
+    if (!seg.self || !agentIntervals.length) return seg;
+    const len = Math.max(0.1, seg.end - seg.start);
+    const overlap = agentIntervals.reduce((acc, a) =>
+      acc + Math.max(0, Math.min(seg.end, a.end + margin) - Math.max(seg.start, a.start - 0.3)), 0);
+    return overlap / len >= 0.5 ? { ...seg, speaker: 'MeetAgent (IA)', self: false, agent: true } : seg;
+  }
+
+  const api = { mergeCaption, CaptionAssembler, markAgentSpeech };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.MeetAgent = Object.assign(root.MeetAgent || {}, api);
 })(typeof globalThis !== 'undefined' ? globalThis : this);

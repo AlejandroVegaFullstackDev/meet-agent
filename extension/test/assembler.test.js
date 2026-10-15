@@ -142,3 +142,17 @@ test('una pausa corta a mitad de frase no deja fragmentos de 1-2 palabras suelto
   b.observe('b1', 'Ana', 'listo', 0);
   assert.equal(b.flush(4500)[0].text, 'listo');
 });
+
+const { markAgentSpeech } = require('../assembler.js');
+
+test('lo que Meet transcribe mientras habla la IA queda como "MeetAgent (IA)"', () => {
+  const agent = [{ start: 10, end: 14 }];                 // la IA habló de 10 a 14 s
+  const during = markAgentSpeech({ speaker: 'Alejandro Vega', self: true, start: 10.4, end: 13.9, text: 'el pie atravesado' }, agent);
+  assert.equal(during.speaker, 'MeetAgent (IA)');
+  assert.equal(during.self, false);
+  const mine = markAgentSpeech({ speaker: 'Alejandro Vega', self: true, start: 20, end: 23, text: 'gracias' }, agent);
+  assert.equal(mine.speaker, 'Alejandro Vega');
+  // Otra persona hablando a la vez no se toca: la voz de la IA sale por TU micrófono.
+  const other = markAgentSpeech({ speaker: 'Ana', self: false, start: 11, end: 13, text: 'sí' }, agent);
+  assert.equal(other.speaker, 'Ana');
+});

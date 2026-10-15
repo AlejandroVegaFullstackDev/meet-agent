@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\MeetAgent.Core\MeetAgent.Core.csproj" />
     <ProjectReference Include="..\MeetAgent.Storage.Sqlite\MeetAgent.Storage.Sqlite.csproj" />
+    <ProjectReference Include="..\MeetAgent.Control\MeetAgent.Control.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -13,8 +13,11 @@ namespace MeetAgent.Mcp;
 /// (sirven aunque la app esté cerrada); empezar y terminar pasan por la app de escritorio,
 /// que es la única que captura audio y la que pregunta el consentimiento.
 /// </summary>
-public sealed class MeetingTools(Func<ITranscriptStore> openStore, IAppControl app)
+public sealed class MeetingTools(Func<ITranscriptStore> openStore, IAppControl app,
+    Func<string, CancellationToken, Task<System.Text.Json.JsonElement?>>? say = null)
 {
+    private readonly Func<string, CancellationToken, Task<System.Text.Json.JsonElement?>> _say =
+        say ?? ((text, ct) => VoiceClient.SayAsync(text, TimeSpan.FromSeconds(30), ct: ct));
     public static readonly TimeSpan StatusTimeout = TimeSpan.FromSeconds(3);
     /// <summary>Tiempo que se espera a que el usuario responda el diálogo de consentimiento.</summary>
     public static readonly TimeSpan ConsentTimeout = TimeSpan.FromMinutes(3);
@@ -98,6 +101,64 @@ public sealed class MeetingTools(Func<ITranscriptStore> openStore, IAppControl a
         return r.MeetingId is { } id && r.Message.StartsWith("Reunión terminada", StringComparison.Ordinal)
             ? $"{r.Message} Reunión #{id}: léela completa con leer_transcripcion(id_reunion={id})."
             : r.Message;
+    }
+
+    /// <summary>La IA habla en el Meet por el micrófono del usuario (extensión + voz local).</summary>
+    public async Task<string> SayAsync(string text, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "No hay nada que decir.";
+        var r = await _say(text.Trim(), ct);
+        if (r is null)
+            return "No hay un Meet con MeetAgent activo. En la pestaña del Meet, el usuario debe pulsar «Transcribir» (eso activa la voz).";
+        if (!r.Value.TryGetProperty("ok", out var ok) || !ok.GetBoolean())
+            return $"No se pudo hablar: {(r.Value.TryGetProperty("error", out var e) ? e.GetString() : "error desconocido")}";
+        var seconds = r.Value.TryGetProperty("seconds", out var sec) ? sec.GetDouble() : 0;
+        return string.Create(CultureInfo.InvariantCulture, $"Enviado al Meet: se reproduce ahora por el micrófono del usuario ({seconds:0.#} s de audio). En la transcripción aparecerá como «MeetAgent (IA)».");
+    }
+
+    /// <summary>
+    /// Espera (sin gastar tokens) hasta que haya texto nuevo en la reunión en curso, o hasta que alguien
+    /// diga <paramref name="keyword"/> (sin tildes ni espacios: «Meet Agent» cuenta como «meetagent»).
+    /// </summary>
+    public async Task<string> WaitAsync(long sinceId, int seconds, string? keyword, CancellationToken ct)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(Math.Clamp(seconds, 2, 300));
+        var key = string.IsNullOrWhiteSpace(keyword) ? null : Normalize(keyword);
+        long? meetingId = null;
+        while (true)
+        {
+            using (var store = openStore())
+            {
+                meetingId ??= store.GetLatestOpenMeeting()?.Id;
+                if (meetingId is { } id)
+                {
+                    var segs = store.GetSegmentsAfter(id, Math.Max(0, sinceId));
+                    var mentioned = key is not null && segs.Any(s => Normalize(s.Segment.Text).Contains(key, StringComparison.Ordinal));
+                    if (segs.Count > 0 && (key is null || mentioned))
+                    {
+                        var sb = new StringBuilder();
+                        if (mentioned) sb.AppendLine($"🔔 te nombraron («{keyword}»). Responde con la herramienta decir si corresponde.");
+                        foreach (var s in segs) sb.AppendLine($"[{TimeFormat.Hms(s.Segment.Start)}] [{s.Segment.Label}] {s.Segment.Text}");
+                        sb.Append(CultureInfo.InvariantCulture, $"— reunión #{id} · siguiente desde_id: {segs[^1].Id}");
+                        return sb.ToString();
+                    }
+                }
+            }
+            if (DateTime.UtcNow >= deadline || ct.IsCancellationRequested)
+                return meetingId is null
+                    ? "No hay una reunión en curso (en el Meet, pulsa «Transcribir» en el panel de MeetAgent)."
+                    : $"(sin novedades) — siguiente desde_id: {sinceId}";
+            try { await Task.Delay(1000, ct); } catch (OperationCanceledException) { }
+        }
+    }
+
+    private static string Normalize(string s)
+    {
+        var d = s.ToLowerInvariant().Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(d.Length);
+        foreach (var c in d)
+            if (char.IsLetterOrDigit(c)) sb.Append(c);
+        return sb.ToString();
     }
 
     private static string Describe(ITranscriptStore store, Meeting m)

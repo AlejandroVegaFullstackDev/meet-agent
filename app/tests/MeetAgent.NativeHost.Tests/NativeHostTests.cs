@@ -215,3 +215,48 @@ public class TtsTests
         Assert.Contains(samples, s => Math.Abs((int)s) > 1000);
     }
 }
+
+public class VoiceChannelTests
+{
+    private sealed class FakeSpeech : ISpeech
+    {
+        public string Name => "falsa";
+        public (int SampleRate, short[] Samples) Synthesize(string text) => (16000, new short[1600]);
+    }
+
+    [Fact]
+    public void Las_respuestas_llevan_el_rid_de_la_peticion()
+    {
+        using var store = new SqliteTranscriptStore("Data Source=:memory:");
+        var host = new CaptionHost(store);
+        var r = JsonDocument.Parse(host.Handle("""{"type":"hello","rid":17}""")).RootElement;
+        Assert.Equal(17, r.GetProperty("rid").GetInt32());
+        var err = JsonDocument.Parse(host.Handle("""{"type":"nada","rid":"x9"}""")).RootElement;
+        Assert.Equal("x9", err.GetProperty("rid").GetString());
+    }
+
+    [Fact]
+    public async Task Decir_por_el_canal_de_voz_empuja_el_audio_a_la_extension()
+    {
+        using var store = new SqliteTranscriptStore("Data Source=:memory:");
+        var pushed = new List<string>();
+        var host = new CaptionHost(store, speech: new FakeSpeech());
+        var pipe = $"meetagent-voice-test-{Guid.NewGuid():N}";
+        await using var voice = VoiceChannel.Start(pipe, host, json => { lock (pushed) pushed.Add(json); return Task.CompletedTask; });
+
+        var reply = await VoiceChannel.SayAsync("Hola equipo", TimeSpan.FromSeconds(5), pipe);
+        Assert.NotNull(reply);
+        Assert.True(reply!.Value.GetProperty("ok").GetBoolean());
+        var msg = JsonDocument.Parse(Assert.Single(pushed)).RootElement;
+        Assert.Equal("play", msg.GetProperty("type").GetString());
+        Assert.Equal("Hola equipo", msg.GetProperty("text").GetString());
+        Assert.False(msg.TryGetProperty("rid", out _));        // mensaje no pedido: sin rid
+        Assert.StartsWith("UklGR", msg.GetProperty("wav").GetString());   // "RIFF" en base64
+    }
+
+    [Fact]
+    public async Task Sin_Meet_abierto_decir_avisa_que_no_hay_quien_hable()
+    {
+        Assert.Null(await VoiceChannel.SayAsync("hola", TimeSpan.FromSeconds(2), $"meetagent-voice-test-{Guid.NewGuid():N}"));
+    }
+}

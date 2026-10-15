@@ -13,6 +13,8 @@ También se puede correr desde el código: `dotnet run --project app/src/MeetAge
 | `buscar(consulta, limite)` | Texto completo sin tildes; admite `prefijo*` y `"frase"` | no |
 | `transcripcion_en_vivo(desde_id, id_reunion?)` | Texto nuevo desde un cursor, para tomar notas mientras la reunión sigue | no (lee la base) |
 | `empezar_reunion(titulo?)` | Pide a la app que empiece. **La app muestra su diálogo de consentimiento y elige el usuario** | sí |
+| `decir(texto)` | **La IA habla en el Meet** con voz sintética, por el micrófono del usuario (extensión + `meetagent-host`). Requiere que en la pestaña del Meet se haya pulsado *Transcribir* | no (sí la extensión en el Meet) |
+| `esperar_novedades(desde_id, segundos, palabra_clave?)` | Espera **sin gastar tokens** hasta que haya texto nuevo o hasta que alguien diga la palabra clave (p. ej. `meetagent`) | no |
 | `terminar_reunion()` | Termina y guarda la reunión en curso | sí |
 
 **Consentimiento:** ninguna herramienta tiene un parámetro para grabar. `empezar_reunion` abre en la app el diálogo *Grabar y transcribir / Solo transcribir / Nada*, y la IA solo se entera de lo que eligió el usuario. Si el usuario no responde en 3 minutos, no se inicia nada. La app y el MCP se hablan por un canal local (socket Unix o named pipe) restringido al usuario del sistema.
@@ -51,6 +53,12 @@ args = []
 
 ### Otros clientes (DeepSeek con opencode/Cline/Continue, Cursor, etc.)
 Cualquier cliente que admita servidores MCP por stdio: comando `RUTA/dist/<plataforma>/meetagent-mcp`, sin argumentos.
+
+## La IA participa en la reunión (voz)
+1. En el Meet: panel MeetAgent → *Transcribir* (activa subtítulos y el canal de voz).
+2. En tu IA (por ejemplo Claude Code): *«Participa en mi Meet: llama a esperar_novedades con palabra_clave "meetagent" en bucle; cuando te nombren, responde corto con decir y preséntate como asistente de IA.»*
+3. Lo que dice la IA sale por tu micrófono (mezclado con tu voz) y queda en la transcripción como **MeetAgent (IA)**.
+Voz actual: espeak-ng (robótica, ya viene en Ubuntu). La voz natural (Piper) es el siguiente paso.
 
 ## Ejemplos de uso
 - «Empieza la reunión "Daily"» → la IA te avisa, tú eliges en la ventana de MeetAgent, y luego lee `transcripcion_en_vivo` cada cierto tiempo.

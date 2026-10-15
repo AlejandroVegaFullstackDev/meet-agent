@@ -41,6 +41,23 @@ public sealed class McpTools(MeetingTools tools)
     public Task<string> EmpezarReunion([Description("Título opcional de la reunión.")] string? titulo = null, CancellationToken ct = default) =>
         tools.StartAsync(titulo, ct);
 
+    [McpServerTool(Name = "decir", Destructive = false, OpenWorld = true), Description(
+        "Habla en el Google Meet en curso con voz sintética, por el micrófono del usuario (extensión MeetAgent). " +
+        "Úsala solo cuando el usuario lo pida o cuando te nombren en la reunión; respuestas cortas (1-3 frases). " +
+        "Empieza presentándote como asistente de IA la primera vez, para que nadie crea que habla el usuario.")]
+    public Task<string> Decir([Description("Lo que vas a decir (máx. ~600 caracteres).")] string texto, CancellationToken ct = default) =>
+        tools.SayAsync(texto, ct);
+
+    [McpServerTool(Name = "esperar_novedades", ReadOnly = true), Description(
+        "Espera sin gastar tokens hasta que haya texto nuevo en la reunión en curso, o (con palabra_clave) hasta que alguien te nombre. " +
+        "Patrón para participar en vivo: llamar en bucle con el 'siguiente desde_id' de la respuesta anterior; cuando diga " +
+        "'te nombraron', responde con decir. Vuelve como máximo a los 'segundos' indicados aunque no haya nada.")]
+    public Task<string> EsperarNovedades(
+        [Description("Cursor: id del último segmento ya leído (0 = desde el inicio).")] long desde_id = 0,
+        [Description("Tiempo máximo de espera (2-300 s).")] int segundos = 60,
+        [Description("Si se indica (p. ej. 'meetagent'), solo vuelve cuando alguien la dice; si no, con cualquier texto nuevo.")] string? palabra_clave = null,
+        CancellationToken ct = default) => tools.WaitAsync(desde_id, segundos, palabra_clave, ct);
+
     [McpServerTool(Name = "terminar_reunion", Destructive = false, OpenWorld = false), Description(
         "Termina la reunión en curso en la app de escritorio. Espera a que se transcriba lo ya capturado y la guarda.")]
     public Task<string> TerminarReunion(CancellationToken ct = default) => tools.StopAsync(ct);

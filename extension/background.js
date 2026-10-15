@@ -2,18 +2,29 @@
 // Un puerto nativo por pestaña; el host responde en orden, así que las respuestas se emparejan en cola.
 const api = globalThis.browser ?? globalThis.chrome;
 const HOST = 'com.meetagent.host';
-const ports = new Map(); // pestaña o página de la extensión → { port, waiting: [] }
+const ports = new Map(); // pestaña o página de la extensión → { port, waiting: Map(rid → resolve) }
+let nextRid = 1;
 let lastDiag = '';
 
 function nativeFor(tabId) {
   let entry = ports.get(tabId);
   if (entry) return entry;
   const port = api.runtime.connectNative(HOST);
-  entry = { port, waiting: [] };
-  port.onMessage.addListener((msg) => entry.waiting.shift()?.resolve(msg));
+  entry = { port, waiting: new Map() };
+  port.onMessage.addListener((msg) => {
+    // Respuesta a un pedido (trae su rid) o mensaje no pedido del conector (p. ej. la IA va a hablar).
+    if (msg?.rid != null && entry.waiting.has(msg.rid)) {
+      const resolve = entry.waiting.get(msg.rid);
+      entry.waiting.delete(msg.rid);
+      resolve(msg);
+    } else if (typeof tabId === 'number') {
+      api.tabs.sendMessage(tabId, { cmd: 'host-push', msg });
+    }
+  });
   port.onDisconnect.addListener(() => {
     const why = api.runtime.lastError?.message || port.error?.message || 'el host de MeetAgent se cerró';
-    for (const w of entry.waiting.splice(0)) w.resolve({ ok: false, type: 'error', error: why });
+    for (const resolve of entry.waiting.values()) resolve({ ok: false, type: 'error', error: why });
+    entry.waiting.clear();
     ports.delete(tabId);
   });
   ports.set(tabId, entry);
@@ -36,9 +47,10 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // La página de historial también habla con el conector (no solo la pestaña de Meet).
   const entry = nativeFor(sender.tab?.id ?? `page:${sender.url}`);
   new Promise((resolve) => {
-    entry.waiting.push({ resolve });
-    try { entry.port.postMessage(msg.payload); }
-    catch (e) { entry.waiting.pop(); resolve({ ok: false, type: 'error', error: String(e) }); }
+    const rid = nextRid++;
+    entry.waiting.set(rid, resolve);
+    try { entry.port.postMessage({ ...msg.payload, rid }); }
+    catch (e) { entry.waiting.delete(rid); resolve({ ok: false, type: 'error', error: String(e) }); }
   }).then(sendResponse);
   return true; // respuesta asíncrona
 });

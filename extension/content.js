@@ -4,7 +4,8 @@
 (function () {
   'use strict';
   const api = globalThis.browser ?? globalThis.chrome;
-  const { selectors: S, CaptionAssembler } = globalThis.MeetAgent;
+  const { selectors: S, CaptionAssembler, markAgentSpeech } = globalThis.MeetAgent;
+  const agentIntervals = [];   // cuándo habló la IA (segundos desde el inicio), para marcar su eco en los subtítulos
   const NOTICE = '📝 Estoy tomando notas de esta reunión con MeetAgent (a partir de los subtítulos de Meet; se guardan solo en mi equipo).';
 
   let state = { running: false, meetingId: null, assembler: null, keys: new WeakMap(), nextKey: 1, seen: new Set(), saved: 0, last: '' };
@@ -123,6 +124,9 @@
               assembler: new CaptionAssembler({ startMs: Date.now(), selfName: S.selfName() }) };
     ui.running(true);
     ui.clear();
+    agentIntervals.length = 0;
+    // Canal de voz: desde ahora tu IA puede hablar en este Meet con la herramienta MCP «decir».
+    native({ type: 'voice-on' }).then((v) => { if (v.ok) ui.status(`Reunión #${r.meetingId} · tu IA puede hablar aquí (${v.voice})`); });
     ensureCaptions();
     ui.status(`Reunión #${r.meetingId} · esperando subtítulos…`);
   }
@@ -158,7 +162,8 @@
   }
 
   async function send(segments) {
-    for (const s of segments) {
+    for (const raw of segments) {
+      const s = markAgentSpeech(raw, agentIntervals);
       const r = await native({ type: 'segment', meetingId: state.meetingId, ...s });
       if (r.ok) {
         state.saved++;
@@ -187,10 +192,21 @@
     ui.status(`Generando voz…`);
     const r = await native({ type: 'tts', text });
     if (!r.ok) { ui.status(`No se pudo generar la voz: ${r.error}`); return; }
-    const id = ++sayId;
-    window.postMessage({ source: 'meetagent', type: 'play', id, wav: r.wav }, '*');
-    ui.status(`🔊 Hablando (${r.seconds} s, ${r.voice})…`);
+    play(r);
   }
+  function play(r) {
+    const id = ++sayId;
+    if (state.running) {
+      const t = (Date.now() - state.assembler.startMs) / 1000;
+      agentIntervals.push({ start: t, end: t + (r.seconds || 0) });
+    }
+    window.postMessage({ source: 'meetagent', type: 'play', id, wav: r.wav }, '*');
+    ui.status(`🔊 Hablando (${r.seconds} s, ${r.voice})${r.text ? `: «${r.text}»` : ''}`);
+  }
+  // Mensajes que empuja el conector: la IA (por el MCP) pidió hablar.
+  (globalThis.browser ?? chrome).runtime.onMessage.addListener((m) => {
+    if (m?.cmd === 'host-push' && m.msg?.type === 'play') play(m.msg);
+  });
   window.addEventListener('message', (ev) => {
     if (ev.data?.source !== 'meetagent-page') return;
     if (ev.data.type === 'played') ui.status('Listo: se dijo en el Meet.');
