@@ -11,6 +11,7 @@ if (builder.Configuration["urls"] is null) builder.WebHost.UseUrls("http://127.0
 var model = AppPaths.Model(builder.Configuration["model"] ?? "small-q5_1");
 await using var transcriber = new WhisperTranscriber(model, WhisperTranscriber.DefaultThreads, adaptiveContext: true);
 var app = builder.Build();
-app.MapStt(transcriber, Environment.GetEnvironmentVariable("MEETAGENT_STT_TOKEN"));
+app.MapStt(transcriber, Environment.GetEnvironmentVariable("MEETAGENT_STT_TOKEN"),
+    dumpDir: Environment.GetEnvironmentVariable("MEETAGENT_STT_DUMP_DIR") is { Length: > 0 } d ? d : null);
 app.Logger.LogInformation("meetagent-stt · {Model}", transcriber.Name);
 await app.RunAsync();

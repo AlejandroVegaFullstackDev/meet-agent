@@ -4,7 +4,9 @@
 #  - secretos aleatorios en deploy/vexa/.env.local (no se versiona);
 #  - el gateway solo escucha en 127.0.0.1 (no queda expuesto a la red);
 #  - a diferencia de `make lite`, NO monta ~/.claude/.credentials.json ni ninguna credencial del usuario.
-# Uso: deploy/vexa/up.sh      ·  Parar: deploy/vexa/down.sh
+# Uso: deploy/vexa/up.sh [STT_MODEL=small-q5_1]  ·  Parar: deploy/vexa/down.sh
+# Modelo por defecto: base-q5_1. El bot de Vexa corta cada petición a los 30 s y en este portátil
+# small tardaba ~19 s por fragmento con la CPU cargada (base: ~2,5 s).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 HERE=deploy/vexa
@@ -45,7 +47,7 @@ if ! docker ps -q -f "name=^$STT$" | grep -q .; then
   docker rm -f "$STT" >/dev/null 2>&1 || true
   docker run -d --name "$STT" --network "$NET" --restart unless-stopped \
     -e MEETAGENT_STT_TOKEN="$STT_TOKEN" -v "$PWD/models:/meetagent/models:ro" \
-    meetagent-stt:local --model "${STT_MODEL:-small-q5_1}" >/dev/null
+    meetagent-stt:local --model "${STT_MODEL:-base-q5_1}" >/dev/null
 fi
 for _ in $(seq 1 40); do docker exec "$STT" sh -c 'exit 0' 2>/dev/null && \
   docker run --rm --network "$NET" "$PG_IMAGE" wget -q -O /dev/null "http://$STT:$STT_PORT/health" 2>/dev/null && break; sleep 1; done

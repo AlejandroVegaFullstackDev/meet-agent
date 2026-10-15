@@ -12,7 +12,9 @@ public static class SttEndpoints
 {
     public const long MaxUploadBytes = 64L * 1024 * 1024;   // ~33 min de PCM 16 kHz mono
 
-    public static WebApplication MapStt(this WebApplication app, ITranscriber transcriber, string? token, string defaultLanguage = "es")
+    /// <param name="dumpDir">Solo diagnóstico: si se indica, guarda cada audio recibido y su texto (datos sensibles: en local).</param>
+    public static WebApplication MapStt(this WebApplication app, ITranscriber transcriber, string? token, string defaultLanguage = "es",
+        string? dumpDir = null)
     {
         var gate = new SemaphoreSlim(1, 1);
 
@@ -43,6 +45,7 @@ public static class SttEndpoints
             finally { gate.Release(); }
 
             var result = OpenAiTranscription.Build(words, pcm.Length / (double)AudioFormat.SampleRate, language);
+            if (dumpDir is not null) Dump(dumpDir, pcm, result);
             return format switch
             {
                 "text" => Results.Text(result.Text),
@@ -51,6 +54,14 @@ public static class SttEndpoints
             };
         }).DisableAntiforgery();
         return app;
+    }
+
+    private static void Dump(string dir, short[] pcm, OpenAiTranscriptionResult result)
+    {
+        Directory.CreateDirectory(dir);
+        var name = Path.Combine(dir, $"{DateTime.UtcNow:HHmmss-fff}");
+        using (var w = new WavWriter(name + ".wav")) w.Write(pcm);
+        File.WriteAllText(name + ".txt", result.Text);
     }
 
     /// <summary>WAV PCM 16 bits de cualquier tasa/canales → 16 kHz mono.</summary>

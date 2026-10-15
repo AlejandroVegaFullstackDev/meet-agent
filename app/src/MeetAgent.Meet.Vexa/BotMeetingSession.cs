@@ -33,10 +33,11 @@ public sealed class BotMeetingSession(IVexaApi api, ITranscriptStore store, stri
 
         await api.StartBotAsync(code, botName, language, ct);
         _code = code;
-        _meetingId = store.StartMeeting(title, DateTimeOffset.Now, "bot-transcribir");
+        var startedAt = DateTimeOffset.Now;
+        _meetingId = store.StartMeeting(title, startedAt, "bot-transcribir");
         Log?.Invoke($"Bot «{botName}» pedido para {MeetLink.Url(code)}");
         _cts = new CancellationTokenSource();
-        var sync = new TranscriptSync(selfName);
+        var sync = new TranscriptSync(selfName, startedAt);
         _completion = Task.Run(() => LoopAsync(code, sync, _cts.Token), CancellationToken.None);
         return _meetingId;
     }

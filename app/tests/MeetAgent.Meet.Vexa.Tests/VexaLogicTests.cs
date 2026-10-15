@@ -66,6 +66,27 @@ public class TranscriptSyncTests
     }
 
     [Fact]
+    public void Tiempos_absolutos_unix_se_vuelven_relativos_al_inicio_de_la_reunion()
+    {
+        // Vexa v0.12 entrega start/end en segundos Unix.
+        var t0 = DateTimeOffset.Parse("2026-10-15T19:59:09.516Z");
+        var sync = new TranscriptSync(meetingStart: t0);
+        var r = sync.Take([new VexaSegment("1", "Ana", "hola", t0.ToUnixTimeMilliseconds() / 1000.0 + 248.2, t0.ToUnixTimeMilliseconds() / 1000.0 + 250, true)]);
+        Assert.Equal(248.2, r[0].Start.TotalSeconds, 1);
+        Assert.Equal(250, r[0].End.TotalSeconds, 1);
+    }
+
+    [Fact]
+    public void Sin_inicio_conocido_usa_el_primer_segmento_como_cero()
+    {
+        var sync = new TranscriptSync();
+        var r = sync.Take([new VexaSegment("1", "Ana", "uno", 1792094597.7, 1792094599, true),
+                           new VexaSegment("2", "Ana", "dos", 1792094614.8, 1792094616, true)]);
+        Assert.Equal(0, r[0].Start.TotalSeconds, 1);
+        Assert.Equal(17.1, r[1].Start.TotalSeconds, 1);
+    }
+
+    [Fact]
     public void Sin_nombre_de_hablante_usa_Otros_sin_nombre()
     {
         var r = new TranscriptSync().Take([V("1", "", 0, "texto")]);
