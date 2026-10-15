@@ -17,3 +17,6 @@ dist/
 # Vexa local: secretos y pid
 deploy/vexa/.env.local
 deploy/vexa/.stt.pid
+
+# Clave privada de la extensión (fija su ID en Chromium)
+deploy/extension/extension-key.pem

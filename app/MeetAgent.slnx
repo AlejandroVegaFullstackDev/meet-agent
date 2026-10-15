@@ -8,6 +8,7 @@
     <Project Path="src/MeetAgent.Desktop/MeetAgent.Desktop.csproj" />
     <Project Path="src/MeetAgent.Mcp/MeetAgent.Mcp.csproj" />
     <Project Path="src/MeetAgent.Meet.Vexa/MeetAgent.Meet.Vexa.csproj" />
+    <Project Path="src/MeetAgent.NativeHost/MeetAgent.NativeHost.csproj" />
     <Project Path="src/MeetAgent.Storage.Sqlite/MeetAgent.Storage.Sqlite.csproj" />
     <Project Path="src/MeetAgent.Stt.Whisper/MeetAgent.Stt.Whisper.csproj" />
     <Project Path="src/MeetAgent.SttServer/MeetAgent.SttServer.csproj" />
@@ -18,6 +19,7 @@
     <Project Path="tests/MeetAgent.Desktop.Tests/MeetAgent.Desktop.Tests.csproj" />
     <Project Path="tests/MeetAgent.Mcp.Tests/MeetAgent.Mcp.Tests.csproj" />
     <Project Path="tests/MeetAgent.Meet.Vexa.Tests/MeetAgent.Meet.Vexa.Tests.csproj" />
+    <Project Path="tests/MeetAgent.NativeHost.Tests/MeetAgent.NativeHost.Tests.csproj" />
     <Project Path="tests/MeetAgent.Storage.Sqlite.Tests/MeetAgent.Storage.Sqlite.Tests.csproj" />
     <Project Path="tests/MeetAgent.SttServer.Tests/MeetAgent.SttServer.Tests.csproj" />
   </Folder>

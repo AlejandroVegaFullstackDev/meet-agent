@@ -18,6 +18,9 @@ for rid in ${RIDS[@]}; do
   # Servidor MCP (stdio) para Claude Code, opencode, Codex…: un solo archivo, sin nativas de audio ni Whisper.
   "$DOTNET" publish app/src/MeetAgent.Mcp -c Release -r "$rid" --self-contained true \
     -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o "$out" --nologo -v quiet
+  # Host de native messaging para la extensión de Meet: un solo archivo, solo SQLite.
+  "$DOTNET" publish app/src/MeetAgent.NativeHost -c Release -r "$rid" --self-contained true \
+    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o "$out" --nologo -v quiet
   # Quitar nativas de otras plataformas y el shader de Metal (solo macOS).
   find "$out/runtimes" -mindepth 1 -maxdepth 1 -type d ! -name "$rid" -exec rm -rf {} + 2>/dev/null || true
   rm -f "$out/ggml-metal.metal"
