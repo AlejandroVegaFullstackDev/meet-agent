@@ -20,6 +20,10 @@ function nativeFor(tabId) {
 }
 
 api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.cmd === 'open-history') {
+    api.tabs.create({ url: api.runtime.getURL('history.html') });
+    return false;
+  }
   if (msg?.cmd !== 'native' || !sender.tab) return false;
   const entry = nativeFor(sender.tab.id);
   new Promise((resolve) => {
@@ -35,3 +39,6 @@ api.tabs?.onRemoved?.addListener((tabId) => {
   ports.get(tabId)?.port.disconnect();
   ports.delete(tabId);
 });
+
+// Ícono de la barra: abre el historial (no hace falta estar en un Meet).
+api.action?.onClicked?.addListener(() => api.tabs.create({ url: api.runtime.getURL('history.html') }));

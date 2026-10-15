@@ -12,7 +12,13 @@ Console.Error.WriteLine($"meetagent-host {CaptionHost.Version} · base {AppPaths
 try
 {
     while (await NativeMessaging.ReadAsync(stdin) is { } json)
-        await NativeMessaging.WriteAsync(stdout, host.Handle(json));
+    {
+        var reply = host.Handle(json);
+        // El navegador no acepta mensajes del host de más de 1 MB: mejor un error claro que cerrar el puerto.
+        if (System.Text.Encoding.UTF8.GetByteCount(reply) > NativeMessaging.MaxMessageBytes)
+            reply = """{"type":"error","ok":false,"error":"Respuesta demasiado grande (más de 1 MB): exporta la reunión desde la CLI."}""";
+        await NativeMessaging.WriteAsync(stdout, reply);
+    }
 }
 catch (Exception ex) when (ex is IOException or InvalidDataException)
 {

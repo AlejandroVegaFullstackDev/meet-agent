@@ -1,7 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MeetAgent.Core;
+using MeetAgent.Core.Export;
 using MeetAgent.Core.Ports;
+using MeetAgent.Core.Text;
 
 namespace MeetAgent.NativeHost;
 
@@ -32,6 +34,10 @@ public sealed class CaptionHost(ITranscriptStore store, Func<DateTimeOffset>? no
                 "segment" => Segment(msg),
                 "end" => End(msg),
                 "diag" => Diag(msg),
+                "list" => List(),
+                "get" => Get(msg),
+                "search" => Search(msg),
+                "export" => ExportMd(msg),
                 var t => Error($"Tipo de mensaje desconocido: {t}"),
             };
         }
@@ -72,6 +78,58 @@ public sealed class CaptionHost(ITranscriptStore store, Func<DateTimeOffset>? no
         if (!_open.Remove(id)) return Error($"La reunión {id} no está abierta");
         store.EndMeeting(id, _now());
         return Reply(new() { ["type"] = "ended", ["ok"] = true, ["meetingId"] = id });
+    }
+
+    // ---------- lectura (página de historial de la extensión) ----------
+
+    private string List()
+    {
+        var arr = new JsonArray();
+        foreach (var m in store.ListMeetings())
+            arr.Add(new JsonObject
+            {
+                ["id"] = m.Id, ["title"] = m.Title, ["startedAt"] = m.StartedAt.ToString("yyyy-MM-dd HH:mm"),
+                ["duration"] = m.EndedAt is { } e ? TimeFormat.Hms(e - m.StartedAt) : null,
+                ["open"] = m.EndedAt is null, ["consent"] = m.Consent, ["segments"] = store.GetSegments(m.Id).Count,
+            });
+        return Reply(new() { ["type"] = "list", ["ok"] = true, ["meetings"] = arr });
+    }
+
+    private string Get(JsonObject m)
+    {
+        var id = (long?)m["meetingId"] ?? -1;
+        var meeting = store.GetMeeting(id);
+        if (meeting is null) return Error($"No existe la reunión {id}");
+        var arr = new JsonArray();
+        foreach (var s in store.GetSegments(id))
+            arr.Add(new JsonObject
+            {
+                ["time"] = TimeFormat.Hms(s.Start), ["speaker"] = s.Label, ["self"] = s.Speaker == Speaker.Yo, ["text"] = s.Text,
+            });
+        return Reply(new() { ["type"] = "meeting", ["ok"] = true, ["id"] = id, ["title"] = meeting.Title, ["segments"] = arr });
+    }
+
+    private string Search(JsonObject m)
+    {
+        var q = ((string?)m["q"])?.Trim();
+        if (string.IsNullOrEmpty(q)) return Error("Consulta vacía");
+        var arr = new JsonArray();
+        foreach (var h in store.Search(q, 50))
+            arr.Add(new JsonObject
+            {
+                ["meetingId"] = h.MeetingId, ["title"] = h.MeetingTitle, ["time"] = TimeFormat.Hms(h.Segment.Start),
+                ["speaker"] = h.Segment.Label, ["snippet"] = h.Snippet,
+            });
+        return Reply(new() { ["type"] = "hits", ["ok"] = true, ["hits"] = arr });
+    }
+
+    private string ExportMd(JsonObject m)
+    {
+        var id = (long?)m["meetingId"] ?? -1;
+        var meeting = store.GetMeeting(id);
+        if (meeting is null) return Error($"No existe la reunión {id}");
+        return Reply(new() { ["type"] = "export", ["ok"] = true, ["filename"] = $"reunion-{id}.md",
+            ["markdown"] = MarkdownExporter.Export(meeting, store.GetSegments(id)) });
     }
 
     /// <summary>

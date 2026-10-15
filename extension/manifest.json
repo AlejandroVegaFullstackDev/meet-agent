@@ -2,17 +2,50 @@
   "manifest_version": 3,
   "name": "MeetAgent — notas de Meet",
   "short_name": "MeetAgent",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Lee los subtítulos de Google Meet (con el nombre de cada persona) y los guarda en MeetAgent, en tu equipo. Sin bot, sin nube.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvI72bCE84OjRltOPh6zoCCVQ1Mp5ifPe5zuLBCoaH4rpq2dX9IZJls442esvbIjSq6Ua3q9lnfEMwaNqsPzh3S/b0n3kDR7erCXMzj1rhYZGq7GXOjtMQE+Guhx6TXIOWVs6Nj9j1bumokaRV7StD+mGoyuEF/iYhnayp5fdf1hMX7KQ4RHnLK92wb45SbwfA7gVpb5vhEnPU2NT0tQV/2wP+dfpYz97Xs9WJB3IH4Y/7jmf6yRTbK9Uz4w72r0FbBHPrP/uhalsVxalUp4whr4GPuxExCZE2GvR1LRBUEgifsNl7hSTx6LfVFrgREwIRTcFcPXTpReradbDAkRxeQIDAQAB",
-  "permissions": ["nativeMessaging", "storage"],
-  "host_permissions": ["https://meet.google.com/*"],
-  "background": { "service_worker": "background.js", "scripts": ["background.js"] },
-  "content_scripts": [{
-    "matches": ["https://meet.google.com/*"],
-    "js": ["selectors.js", "assembler.js", "content.js"],
-    "run_at": "document_idle"
-  }],
-  "icons": { "48": "icons/icon-48.png", "128": "icons/icon-128.png" },
-  "browser_specific_settings": { "gecko": { "id": "meetagent@alejandrovega.dev", "strict_min_version": "128.0" } }
+  "permissions": [
+    "nativeMessaging",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://meet.google.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "scripts": [
+      "background.js"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://meet.google.com/*"
+      ],
+      "js": [
+        "selectors.js",
+        "assembler.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "meetagent@alejandrovega.dev",
+      "strict_min_version": "128.0"
+    }
+  },
+  "action": {
+    "default_title": "MeetAgent · Historial",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png"
+    }
+  }
 }

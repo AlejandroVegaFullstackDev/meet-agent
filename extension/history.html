@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MeetAgent · Historial</title>
+  <link rel="icon" href="icons/icon-48.png">
+  <style>
+    :root { --bg:#f6f7f9; --card:#fff; --line:#e3e6ea; --muted:#6b7280; --ink:#111827; --accent:#7c3aed;
+            --me-bg:#efe7fd; --me:#6d28d9; --other-bg:#fdf1e3; --other:#b45309; --hit:#fde68a; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#14171c; --card:#1c2027; --line:#2b313a; --muted:#9aa3af; --ink:#eef0f3; --accent:#8b5cf6;
+              --me-bg:#2e1f4d; --me:#c4b5fd; --other-bg:#3a2a17; --other:#f2b36b; --hit:#6b4f00; }
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font:14px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+    header { display:flex; align-items:center; gap:10px; padding:14px 20px; border-bottom:1px solid var(--line); }
+    header img { width:28px; height:28px; border-radius:7px; }
+    header h1 { font-size:17px; margin:0; font-weight:650; }
+    header .st { margin-left:auto; color:var(--muted); font-size:12px; }
+    main { display:grid; grid-template-columns:320px 1fr; gap:16px; padding:16px 20px; height:calc(100vh - 58px); }
+    .left { display:flex; flex-direction:column; min-height:0; gap:10px; }
+    form { display:flex; gap:6px; }
+    input[type=search] { flex:1; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); font:inherit; }
+    button { font:inherit; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; padding:7px 12px; cursor:pointer; }
+    button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+    button:disabled { opacity:.5; cursor:default; }
+    ul { list-style:none; margin:0; padding:0; overflow-y:auto; }
+    .list { flex:1; min-height:0; border:1px solid var(--line); border-radius:10px; background:var(--card); }
+    .list li { padding:10px 12px; border-bottom:1px solid var(--line); cursor:pointer; }
+    .list li:hover { background:color-mix(in srgb, var(--accent) 8%, transparent); }
+    .list li.sel { background:color-mix(in srgb, var(--accent) 18%, transparent); }
+    .t { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .m { color:var(--muted); font-size:12px; }
+    .live { color:#dc2626; font-weight:600; }
+    .hits { max-height:35vh; border:1px solid var(--line); border-radius:10px; background:var(--card); }
+    .hits li { padding:8px 12px; border-bottom:1px solid var(--line); cursor:pointer; font-size:13px; }
+    mark { background:var(--hit); color:inherit; border-radius:3px; padding:0 2px; }
+    .right { display:flex; flex-direction:column; min-height:0; }
+    .bar { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+    .bar h2 { font-size:17px; margin:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .transcript { flex:1; overflow-y:auto; border:1px solid var(--line); border-radius:10px; background:var(--card); padding:12px 16px; }
+    .row { display:grid; grid-template-columns:auto auto 1fr; gap:10px; padding:4px 0; align-items:start; }
+    .time { color:var(--muted); font:12px ui-monospace, monospace; padding-top:2px; }
+    .who { font-size:12px; font-weight:650; border-radius:5px; padding:1px 7px; background:var(--other-bg); color:var(--other); white-space:nowrap; }
+    .me .who { background:var(--me-bg); color:var(--me); }
+    .empty { color:var(--muted); text-align:center; margin-top:18vh; }
+    .msg { color:var(--muted); font-size:12px; margin-top:8px; min-height:16px; }
+    @media (max-width: 760px) { main { grid-template-columns:1fr; height:auto; } .list { max-height:40vh; } }
+  </style>
+</head>
+<body>
+  <header><img src="icons/icon-48.png" alt=""><h1>MeetAgent · Historial</h1><span class="st" id="st"></span></header>
+  <main>
+    <section class="left">
+      <form id="search"><input type="search" id="q" placeholder='Buscar en todas (prefijo*, "frase")'><button>Buscar</button></form>
+      <ul class="hits" id="hits" hidden></ul>
+      <ul class="list" id="meetings"></ul>
+    </section>
+    <section class="right">
+      <div class="bar"><h2 id="title">Elige una reunión</h2>
+        <button id="refresh">Actualizar</button><button id="export" class="primary" disabled>Exportar .md</button></div>
+      <div class="transcript" id="transcript"><p class="empty">Tus reuniones de Meet aparecen aquí. Todo se guarda solo en tu equipo.</p></div>
+      <div class="msg" id="msg"></div>
+    </section>
+  </main>
+  <script src="history.js"></script>
+</body>
+</html>

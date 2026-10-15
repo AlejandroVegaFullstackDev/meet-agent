@@ -54,6 +54,7 @@
           <button class="primary go">Transcribir</button>
           <button class="stop" disabled>Detener</button>
           <button class="notice" disabled title="Publica en el chat que estás tomando notas">Avisar en el chat</button>
+          <button class="hist" title="Abre todas tus reuniones guardadas">Historial</button>
           <button class="diag" title="Envía a MeetAgent la estructura de la página (sin el texto) para ajustar los selectores">Diagnóstico</button>
         </div>
       </div>`;
@@ -61,6 +62,7 @@
     $('.go').onclick = start;
     $('.stop').onclick = () => stop('Detenido.');
     $('.notice').onclick = postNotice;
+    $('.hist').onclick = () => { try { (globalThis.browser ?? chrome).runtime.sendMessage({ cmd: 'open-history' }); } catch (e) { $('.s').textContent = String(e); } };
     $('.diag').onclick = async () => {
       const r = await native({ type: 'diag', text: S.diagnose() });
       $('.s').textContent = r.ok ? 'Diagnóstico guardado en MeetAgent (data/extension-diag.txt).' : `No se pudo: ${r.error}`;

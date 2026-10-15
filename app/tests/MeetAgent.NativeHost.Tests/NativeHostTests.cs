@@ -114,3 +114,60 @@ public class CaptionHostTests
         Assert.NotNull(f.Store.GetMeeting(id)!.EndedAt);
     }
 }
+
+public class CaptionHostReadTests
+{
+    private static (HostFixture f, long a, long b) Seed()
+    {
+        var f = new HostFixture();
+        var a = f.Send("""{"type":"start","meet":"abc-defg-hij","title":"Daily"}""").GetProperty("meetingId").GetInt64();
+        f.Send($$"""{"type":"segment","meetingId":{{a}},"speaker":"Ana Gómez","start":65,"end":70,"text":"Revisemos el presupuesto"}""");
+        f.Send($$"""{"type":"end","meetingId":{{a}}}""");
+        var b = f.Send("""{"type":"start","meet":"xyz-abcd-efg","title":"Sprint"}""").GetProperty("meetingId").GetInt64();
+        f.Send($$"""{"type":"segment","meetingId":{{b}},"speaker":"Alejandro Vega","self":true,"start":1,"end":2,"text":"Hola"}""");
+        return (f, a, b);
+    }
+
+    [Fact]
+    public void List_devuelve_todas_las_reuniones_con_resumen()
+    {
+        var (f, a, b) = Seed();
+        using var _ = f;
+        var r = f.Send("""{"type":"list"}""");
+        Assert.True(r.GetProperty("ok").GetBoolean());
+        var ms = r.GetProperty("meetings").EnumerateArray().ToList();
+        Assert.Equal([b, a], ms.Select(m => m.GetProperty("id").GetInt64()));
+        Assert.Equal("Daily", ms[1].GetProperty("title").GetString());
+        Assert.Equal(1, ms[1].GetProperty("segments").GetInt32());
+        Assert.False(ms[1].GetProperty("open").GetBoolean());
+        Assert.True(ms[0].GetProperty("open").GetBoolean());
+        Assert.Equal("subtitulos", ms[0].GetProperty("consent").GetString());
+    }
+
+    [Fact]
+    public void Get_devuelve_los_segmentos_con_tiempo_y_nombre()
+    {
+        var (f, a, _) = Seed();
+        using var __ = f;
+        var r = f.Send($$"""{"type":"get","meetingId":{{a}}}""");
+        var s = r.GetProperty("segments")[0];
+        Assert.Equal("00:01:05", s.GetProperty("time").GetString());
+        Assert.Equal("Ana Gómez", s.GetProperty("speaker").GetString());
+        Assert.False(s.GetProperty("self").GetBoolean());
+        Assert.Equal("Revisemos el presupuesto", s.GetProperty("text").GetString());
+        Assert.False(f.Send("""{"type":"get","meetingId":999}""").GetProperty("ok").GetBoolean());
+    }
+
+    [Fact]
+    public void Search_y_export()
+    {
+        var (f, a, _) = Seed();
+        using var __ = f;
+        var hit = f.Send("""{"type":"search","q":"PRESUPUESTO"}""").GetProperty("hits")[0];
+        Assert.Equal(a, hit.GetProperty("meetingId").GetInt64());
+        Assert.Contains("[presupuesto]", hit.GetProperty("snippet").GetString());
+        var md = f.Send($$"""{"type":"export","meetingId":{{a}}}""").GetProperty("markdown").GetString();
+        Assert.StartsWith("# Daily", md);
+        Assert.Contains("Ana Gómez", md);
+    }
+}

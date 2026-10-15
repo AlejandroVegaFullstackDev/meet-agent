@@ -2,7 +2,21 @@
 
 # MeetAgent
 
-Transcribe tus reuniones **en tu propio equipo**: escucha tu micrófono (**Yo**) y el audio del sistema (**Otros**), y escribe en vivo `[hh:mm:ss] [Yo|Otros] texto`. Antes de cada reunión pregunta si quieres grabar el audio. Nada sale de tu computador.
+Notas de **Google Meet** con **tu propia IA**. Una extensión del navegador lee los subtítulos de Meet (con el nombre de cada persona) y los guarda **solo en tu equipo**; tu IA (Claude, Codex, Gemini, DeepSeek…) hace actas, resúmenes y responde preguntas por **MCP**. Sin bots, sin servidores, sin modelos locales.
+
+Firefox · Chrome · Edge — Windows y Linux · Extensión MV3 + conector .NET (native messaging) · SQLite FTS5 · MCP
+
+## Instalar (2 pasos)
+1. Descarga el paquete de tu sistema (`scripts/package-release.sh` los genera en `dist/release/`) y ejecuta `install.ps1` (Windows) o `./install.sh` (Linux). No pide administrador.
+2. Carga la extensión (`extension/`): ver [LEEME](deploy/release/LEEME.md).
+
+En el Meet: panel **MeetAgent** → *Transcribir*. Historial: botón del panel o el ícono en la barra del navegador.
+
+> **Modo avanzado (sin Meet):** la app de escritorio de abajo (captura de micrófono + audio del sistema con Whisper local) sigue en el repo para llamadas fuera de Meet. No es parte de la instalación normal (ADR-0011).
+
+---
+
+## Modo avanzado: app de escritorio con captura local
 
 Windows y Linux · C# / .NET 10 · Whisper (whisper.cpp) en CPU · Avalonia · SQLite FTS5
 

@@ -1,0 +1,5 @@
+# ADR-0011: El producto es la extensión; la app de escritorio pasa a modo avanzado
+**Estado:** aceptada · 2026-10-15 (decisión de Alejandro: "dejémoslo como una extensión fácil de instalar para Roda")
+**Decisión:** lo que se reparte es la extensión más el conector (`meetagent-host`) y el MCP (`meetagent-mcp`). El historial (listar, abrir, buscar, exportar) vive dentro de la extensión (`history.html`) y usa el mismo conector. Los instaladores son de un solo comando, sin administrador (`install.ps1` para Windows en HKCU, `install.sh` para Linux), y se arman con `scripts/package-release.sh`.
+**La app de escritorio** (Avalonia, captura local con Whisper) se queda en el repo como *modo avanzado* para llamadas fuera de Meet (Zoom o Teams de escritorio, WhatsApp, presencial). No forma parte de la instalación normal.
+**Pendiente para Roda:** publicar la extensión en privado (Chrome Web Store solo para el dominio, o AMO "no listado"). El ID de la tienda se agrega a `chromium-ids.txt` del paquete; el instalador de Windows se probó por escrito, falta probarlo en un equipo Windows.
