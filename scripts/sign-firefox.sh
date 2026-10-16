@@ -6,6 +6,10 @@ cd "$(dirname "$0")/.."
 scripts/build-firefox.sh
 read -rp  "API key de AMO (empieza con user:): " WEB_EXT_API_KEY
 read -rsp "API secret de AMO (no se muestra): " WEB_EXT_API_SECRET; echo
+WEB_EXT_API_KEY="$(echo "$WEB_EXT_API_KEY" | tr -d '[:space:]')"
+WEB_EXT_API_SECRET="$(echo "$WEB_EXT_API_SECRET" | tr -d '[:space:]')"
+# El «Emisor JWT» de AMO es user:NNNN:NNN; si se pegó sin el prefijo, se agrega.
+[[ "$WEB_EXT_API_KEY" == user:* ]] || WEB_EXT_API_KEY="user:$WEB_EXT_API_KEY"
 export WEB_EXT_API_KEY WEB_EXT_API_SECRET
 npx --yes web-ext@8 sign --source-dir dist/firefox --artifacts-dir dist/firefox-signed --channel unlisted
 unset WEB_EXT_API_KEY WEB_EXT_API_SECRET
