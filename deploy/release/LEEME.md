@@ -10,7 +10,7 @@ Lee los **subtítulos de Google Meet** (con el nombre de cada persona) y los gua
      `xattr -d com.apple.quarantine ~/.local/share/MeetAgent/bin/meetagent-host`
 2. **Extensión** (carpeta `extension/` o `meetagent-extension.zip`):
    - Chrome/Edge/Brave: `chrome://extensions`, `edge://extensions` o `brave://extensions` → *Modo de desarrollador* → *Cargar descomprimida* → carpeta `extension/`.
-   - Firefox: `about:debugging#/runtime/this-firefox` → *Cargar complemento temporal* → `extension/manifest.json`.
+   - **Firefox:** abre el archivo `meetagent-firefox-<versión>.xpi` (firmado por Mozilla) con Firefox, o arrástralo a la ventana → *Añadir*. Queda instalada para siempre.
    (Cuando la empresa la publique en privado, se instala desde la tienda con un clic o la instala el administrador).
 
 ## Usar

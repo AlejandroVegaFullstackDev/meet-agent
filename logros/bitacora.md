@@ -13,3 +13,8 @@
 - **Sigue:** que Alejandro la pruebe con audio real; pendientes de H1 y H3 y las decisiones de VAD y troceo.
 - **Logrado:** marca morada (ícono vectorial, bandeja, .ico, acento de la UI). Servidor MCP con 7 herramientas sobre el mismo Core; empezar pasa por el diálogo de la app (canal local de usuario). Probado con Claude Code de punta a punta, incluido el canal real con la app abierta. opencode conecta, pero su modelo no respondió (OpenAI falla; el plan gratuito pide 1.18). AGENTS.md como plan B.
 - **Sigue:** wordmark (imagen de Gemini o fuente Pacifico), actualizar opencode si Alejandro lo autoriza, pendientes de H1 y H3.
+
+## 2026-10-15/16
+- **Logrado:** bot de Meet con Vexa autohospedado + STT propio (`meetagent-stt`); funcionó, pero se apagó por RAM. Decisión: **extensión de subtítulos de Meet** ("un Tactiq mejor") y solo extensión para Roda (ADR-0010, ADR-0011).
+- **Logrado:** extensión funcionando en Firefox con un Meet real; historial dentro de la extensión; la IA habla en el Meet (`decir`, `esperar_novedades`); instaladores de un comando; extensión firmada por Mozilla; card en Trello (Iniciativas Desarrollo → En proceso); análisis del cliente de AgentCall (`docs/research/agentcall.md`).
+- **Sigue:** voz Piper, tienda de Chrome/Edge para Roda, probar Windows y macOS, piloto con 2-3 personas.
