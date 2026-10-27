@@ -1,0 +1,79 @@
+# En cada push a main: pruebas → paquetes → release v<versión del manifest>.
+#  - Versión nueva: crea la release y envía la extensión a Firefox (AMO) y Edge Add-ons si hay secretos.
+#  - Misma versión: mueve la etiqueta al último commit y reemplaza los paquetes de la release.
+# Para publicar en las tiendas, sube "version" en extension/manifest.json.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+      AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+      EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
+      EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+      EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Pruebas
+        run: |
+          node --test extension/test/*.test.js
+          scripts/build-firefox.sh
+          npx --yes web-ext@8 lint --source-dir dist/firefox
+          dotnet test app/MeetAgent.slnx
+
+      - name: Versión
+        id: v
+        run: |
+          V=$(python3 -c "import json;print(json.load(open('extension/manifest.json'))['version'])")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          if gh release view "v$V" >/dev/null 2>&1; then echo "nueva=false"; else echo "nueva=true"; fi >> "$GITHUB_OUTPUT"
+
+      - name: Paquetes
+        run: scripts/package-release.sh
+
+      - name: Release
+        env:
+          V: ${{ steps.v.outputs.version }}
+        run: |
+          if [ "${{ steps.v.outputs.nueva }}" = true ]; then
+            gh release create "v$V" dist/release/* --target "$GITHUB_SHA" --title "MeetAgent $V" --generate-notes
+          else
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/v$V" -f sha="$GITHUB_SHA" -F force=true
+            gh release upload "v$V" dist/release/* --clobber
+          fi
+
+      - name: Firefox (AMO, listada)
+        if: steps.v.outputs.nueva == 'true' && env.AMO_JWT_ISSUER != ''
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          npx --yes web-ext@8 sign --source-dir dist/firefox --artifacts-dir dist/firefox-signed \
+            --channel listed --approval-timeout 0
+
+      - name: Edge Add-ons
+        if: steps.v.outputs.nueva == 'true' && env.EDGE_PRODUCT_ID != ''
+        run: |
+          scripts/publish-edge.sh "dist/release/meetagent-extension-tienda-${{ steps.v.outputs.version }}.zip" \
+            "Versión ${{ steps.v.outputs.version }}. Requiere el conector local (native messaging) de https://github.com/${{ github.repository }}/releases"

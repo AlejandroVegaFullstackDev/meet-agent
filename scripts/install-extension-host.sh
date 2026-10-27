@@ -7,7 +7,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 NAME=com.meetagent.host
 GECKO_ID=meetagent@alejandrovega.dev
-CHROMIUM_ID=$(cat deploy/extension/chromium-id.txt)
+# Un ID por línea: el de la key fija (carga a mano) y los que asignan las tiendas (Edge Add-ons, Chrome Web Store).
+ORIGINS=$(grep -v '^\s*$' deploy/extension/chromium-id.txt | sed 's#.*#"chrome-extension://&/"#' | paste -sd, -)
 
 if [ "$(uname -s)" = "Darwin" ]; then
   case "$(uname -m)" in arm64) RID=osx-arm64 ;; *) RID=osx-x64 ;; esac
@@ -37,7 +38,7 @@ for d in "${DIRS_CHROMIUM[@]}"; do
   mkdir -p "$d"
   cat > "$d/$NAME.json" <<JSON
 { "name": "$NAME", "description": "MeetAgent: guarda los subtítulos de Meet en tu equipo", "path": "$HOST_BIN",
-  "type": "stdio", "allowed_origins": ["chrome-extension://$CHROMIUM_ID/"] }
+  "type": "stdio", "allowed_origins": [$ORIGINS] }
 JSON
   echo "✓ $d"
 done

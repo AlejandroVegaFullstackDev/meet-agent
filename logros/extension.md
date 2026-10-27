@@ -23,6 +23,6 @@ C#: 173 · JS: 16 · validador de Mozilla: 0/0/0. Instalador de Linux probado en
 
 ## Pendiente
 - Voz natural (Piper) en lugar de espeak.
-- Publicar en la Chrome Web Store / Edge (privada para el dominio) y agregar su ID a `chromium-ids.txt`.
+- Publicar en Firefox (AMO, listada) y Edge Add-ons, pública para cualquiera (ver `docs/tiendas.md`), y agregar el ID de Edge a `deploy/extension/chromium-id.txt`.
 - Probar los instaladores de Windows y macOS en equipos reales.
 - Retomar la misma reunión si se recarga la pestaña; prompt MCP de «acta de reunión».

@@ -8,10 +8,10 @@ Lee los **subtítulos de Google Meet** (con el nombre de cada persona) y los gua
    - Linux y macOS: `./install.sh`
    - macOS: si al abrir un Meet el conector no arranca, quítale la cuarentena al binario descargado:
      `xattr -d com.apple.quarantine ~/.local/share/MeetAgent/bin/meetagent-host`
-2. **Extensión** (carpeta `extension/` o `meetagent-extension.zip`):
-   - Chrome/Edge/Brave: `chrome://extensions`, `edge://extensions` o `brave://extensions` → *Modo de desarrollador* → *Cargar descomprimida* → carpeta `extension/`.
-   - **Firefox:** abre el archivo `meetagent-firefox-<versión>.xpi` (firmado por Mozilla) con Firefox, o arrástralo a la ventana → *Añadir*. Queda instalada para siempre.
-   (Cuando la empresa la publique en privado, se instala desde la tienda con un clic o la instala el administrador).
+2. **Extensión:**
+   - **Firefox:** instálala desde addons.mozilla.org (busca «MeetAgent»).
+   - **Edge:** instálala desde Edge Add-ons (busca «MeetAgent»).
+   - **Chrome / Brave / sin tienda:** `chrome://extensions` (o `edge://extensions`, `brave://extensions`) → *Modo de desarrollador* → *Cargar descomprimida* → carpeta `extension/` de este paquete.
 
 ## Usar
 - En un Meet aparece el panel **MeetAgent** abajo a la izquierda → **Transcribir**. Si los subtítulos no se activan, pulsa `c` y elige Español.
