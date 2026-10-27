@@ -20,7 +20,8 @@ public class HistoryViewModelTests
         var subs = store.StartMeeting("SPRINT BRIEF", T0.AddDays(2), "subtitulos");
         store.AddSegment(subs, new TranscriptSegment(Speaker.Otros, TimeSpan.FromSeconds(65), TimeSpan.FromSeconds(70), "La tabla de concesionarios", "Juan Pérez"));
         var dir = Directory.CreateTempSubdirectory("meetagent-hist-").FullName;
-        return (new HistoryViewModel(store, dir), store, dir);
+        // Reloj fijo en la misma zona que T0: la fecha no depende de la zona del equipo que corre las pruebas.
+        return (new HistoryViewModel(store, dir, now: () => T0.AddDays(4)), store, dir);
     }
 
     [AvaloniaFact]
