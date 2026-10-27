@@ -6,6 +6,14 @@ namespace MeetAgent.Core.Analysis;
 
 public sealed record ActionItem(string Tarea, string? Responsable = null, string? Fecha = null);
 
+/// <param name="Text">Párrafo de la sección (resumen o tono); null si solo tiene lista.</param>
+/// <param name="Items">Viñetas de la sección; vacío si solo tiene texto.</param>
+public sealed record InsightSection(string Title, string? Text, IReadOnlyList<string> Items)
+{
+    public bool HasText => !string.IsNullOrWhiteSpace(Text);
+    public bool HasItems => Items.Count > 0;
+}
+
 /// <summary>Lo importante de una reunión según la IA. Los nombres JSON son los que pide <see cref="MeetingAnalyzer.Schema"/>.</summary>
 public sealed record MeetingInsights(
     string Resumen,
@@ -50,6 +58,31 @@ public sealed record MeetingInsights(
 
     /// <summary>Para mostrar en la app: títulos en mayúsculas y viñetas, sin sintaxis Markdown.</summary>
     public string ToPlainText() => Render(markdown: false);
+
+    /// <summary>
+    /// El análisis separado por secciones para pintar listas (resumen, decisiones, tareas…).
+    /// Las secciones vacías no se incluyen.
+    /// </summary>
+    public IReadOnlyList<InsightSection> ToSections()
+    {
+        var sections = new List<InsightSection>();
+        if (!string.IsNullOrWhiteSpace(Resumen)) sections.Add(new("Resumen", Resumen.Trim(), []));
+        if (Decisiones.Count > 0) sections.Add(new("Decisiones", null, Decisiones));
+        if (Tareas.Count > 0) sections.Add(new("Tareas", null, Tareas.Select(TaskText).ToList()));
+        if (Temas.Count > 0) sections.Add(new("Temas", null, Temas));
+        if (PreguntasAbiertas.Count > 0) sections.Add(new("Preguntas abiertas", null, PreguntasAbiertas));
+        if (Riesgos.Count > 0) sections.Add(new("Riesgos", null, Riesgos));
+        if (!string.IsNullOrWhiteSpace(Tono)) sections.Add(new("Tono", Tono.Trim(), []));
+        return sections;
+    }
+
+    private static string TaskText(ActionItem t)
+    {
+        var text = t.Tarea;
+        if (t.Responsable is not null) text += $" — {t.Responsable}";
+        if (t.Fecha is not null) text += $" ({t.Fecha})";
+        return text;
+    }
 
     private string Render(bool markdown)
     {

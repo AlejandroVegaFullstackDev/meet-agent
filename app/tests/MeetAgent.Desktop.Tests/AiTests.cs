@@ -47,13 +47,19 @@ public class AiTests
         vm.Selected = vm.Meetings.Single(m => m.Id == id);
         Assert.Equal(["Ana", "Luis"], vm.Speakers.Select(s => s.Name));
         Assert.Equal("75 %", vm.Speakers[0].Percent);
-        Assert.Null(vm.InsightsText);
+        Assert.Empty(vm.InsightBlocks);
+        Assert.True(vm.ShowNoAnalysis);
+        Assert.False(vm.Selected.HasAnalysis);
 
         await vm.AnalyzeCommand.ExecuteAsync(null);
 
         Assert.Equal(1, chat.Calls);
-        Assert.Contains("Lanzar el lunes", vm.InsightsText);
-        Assert.Contains("DeepSeek · deepseek-chat", vm.InsightsInfo);
+        Assert.Contains(vm.InsightBlocks, s => s.Title == "DECISIONES" && s.Items.Contains("Lanzar el lunes"));
+        Assert.Contains(vm.InsightBlocks, s => s.Title == "TAREAS" && s.Items.Contains("Avisar a soporte — Luis"));
+        Assert.StartsWith("Analizada el ", vm.InsightsInfo);
+        Assert.DoesNotContain("DeepSeek", vm.InsightsInfo);
+        Assert.True(vm.HasInsights);
+        Assert.True(vm.Meetings.Single(m => m.Id == id).HasAnalysis);
         Assert.Equal("DeepSeek · deepseek-chat", store.GetInsights(id)!.Model);
 
         vm.ExportCommand.Execute(null);

@@ -66,6 +66,24 @@ public class MeetingAnalysisTests
         Assert.Throws<FormatException>(() => MeetingInsights.Parse("no sé"));
 
     [Fact]
+    public void ToSections_separa_texto_y_vinetas_y_omite_lo_vacio()
+    {
+        var i = new MeetingInsights("Resumen corto.", ["D1"], [new ActionItem("T1", "Luis", "viernes")],
+            [], [], ["Retraso"], "Tranquilo");
+
+        var sections = i.ToSections();
+
+        Assert.Equal(["Resumen", "Decisiones", "Tareas", "Riesgos", "Tono"], sections.Select(s => s.Title));
+        Assert.Equal("Resumen corto.", sections[0].Text);
+        Assert.True(sections[0].HasText);
+        Assert.False(sections[0].HasItems);
+        Assert.Equal(["D1"], sections[1].Items);
+        Assert.Equal(["T1 — Luis (viernes)"], sections[2].Items);
+        Assert.False(sections[2].HasText);
+        Assert.DoesNotContain(sections, s => s.Title is "Temas" or "Preguntas abiertas");
+    }
+
+    [Fact]
     public void Json_ida_y_vuelta_y_markdown()
     {
         var i = new MeetingInsights("Resumen corto.", ["D1"], [new ActionItem("T1", "Luis", "viernes")], ["Presupuesto"], [], ["Retraso"], "Tranquilo");

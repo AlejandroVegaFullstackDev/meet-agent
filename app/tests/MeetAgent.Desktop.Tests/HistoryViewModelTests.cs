@@ -30,10 +30,27 @@ public class HistoryViewModelTests
         using var _s = store;
         vm.Refresh();
         Assert.Equal(["SPRINT BRIEF", "Meet con bot", "Planeación"], vm.Meetings.Select(m => m.Title));
-        Assert.Equal(["Subtítulos de Meet", "Bot de Meet", "Micrófono"], vm.Meetings.Select(m => m.Source));
+        Assert.Equal(["Meet", "Meet", "Micrófono"], vm.Meetings.Select(m => m.Source));
         Assert.Equal("00:30:00", vm.Meetings[2].Duration);
         Assert.Equal("en curso", vm.Meetings[0].Duration);
-        Assert.Equal(1, vm.Meetings[0].SegmentCount);
+        Assert.Equal("15/10/2026 · 09:00", vm.Meetings[2].When);
+        Assert.All(vm.Meetings.Take(2), m => Assert.True(m.IsMeet));
+        Assert.False(vm.Meetings[2].IsMeet);
+        Assert.All(vm.Meetings, m => Assert.False(m.HasAnalysis));
+    }
+
+    [AvaloniaFact]
+    public void Una_reunion_de_hoy_se_muestra_como_HOY_con_la_hora()
+    {
+        var store = new SqliteTranscriptStore("Data Source=:memory:");
+        using var _s = store;
+        var now = new DateTimeOffset(2026, 10, 27, 18, 0, 0, TimeSpan.FromHours(-5));
+        store.StartMeeting("Daily de hoy", now.AddHours(-2), "grabar");
+        var vm = new HistoryViewModel(store, Directory.CreateTempSubdirectory("meetagent-hoy-").FullName, now: () => now);
+
+        vm.Refresh();
+
+        Assert.Equal("HOY · 16:00", Assert.Single(vm.Meetings).When);
     }
 
     [AvaloniaFact]
@@ -77,7 +94,7 @@ public class HistoryViewModelTests
             var file = Assert.Single(Directory.GetFiles(dir, "*.md"));
             Assert.Contains("# Meet con bot", File.ReadAllText(file));
             Assert.Contains("Ana Gómez", File.ReadAllText(file));
-            Assert.Contains(file, vm.Message);
+            Assert.Equal("Reunión exportada a Markdown.", vm.Message);
         }
         finally { Directory.Delete(dir, true); }
     }

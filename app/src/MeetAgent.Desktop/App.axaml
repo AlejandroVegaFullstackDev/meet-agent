@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:MeetAgent.Desktop.ViewModels"
              xmlns:views="using:MeetAgent.Desktop.Views"
+             xmlns:conv="using:MeetAgent.Desktop.Converters"
              x:Class="MeetAgent.Desktop.App"
              RequestedThemeVariant="Default">
 
@@ -21,6 +22,9 @@
   </Application.DataTemplates>
 
   <Application.Resources>
+    <!-- Token de color → pincel del tema actual (barras de participación por hablante). -->
+    <conv:BrushKeyConverter x:Key="BrushKey" />
+
     <!-- Una línea de transcripción: [hh:mm:ss] chip del hablante, texto (vista en vivo e historial). -->
     <DataTemplate x:Key="LineTemplate" x:DataType="vm:TranscriptLine">
       <Grid ColumnDefinitions="Auto,Auto,*" Margin="0,5">

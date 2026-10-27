@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using MeetAgent.Core;
+using MeetAgent.Core.Analysis;
 using MeetAgent.Desktop.ViewModels;
 using MeetAgent.Desktop.Views;
 
@@ -186,7 +187,16 @@ public class ScreenshotTests
         store.AddSegment(b, new TranscriptSegment(Speaker.Yo, TimeSpan.FromSeconds(12), TimeSpan.FromSeconds(14), "Perfecto, ¿y la de usuarios?", "Alejandro Vega"));
         store.AddSegment(b, new TranscriptSegment(Speaker.Otros, TimeSpan.FromSeconds(16), TimeSpan.FromSeconds(20), "También, con el mismo esquema.", "Ana Gómez"));
         store.EndMeeting(b, t0.AddDays(1).AddMinutes(18));
-        var history = new HistoryViewModel(store, Path.GetTempPath());
+        var analysis = new MeetingInsights(
+            "Se revisó el estado del sprint y la tabla de concesionarios.",
+            ["Lanzar el viernes"],
+            [new ActionItem("Avisar a soporte", "Ana Gómez", "lunes")],
+            ["Tabla de concesionarios", "Usuarios"],
+            ["¿Falta el índice de usuarios?"],
+            ["El esquema aún no está migrado"],
+            "Tranquilo y directo");
+        store.SaveInsights(b, analysis.ToJson(), "Claude", t0.AddDays(1).AddMinutes(20));
+        var history = new HistoryViewModel(store, Path.GetTempPath(), store);
         var vm = new MainViewModel(Fakes.Session(new Fakes.Store(), new Fakes.Recorders()), "small-q5_1 (4 hilos)", () => Task.FromResult(Consent.None)) { History = history };
         var w = new MainWindow { DataContext = vm };
         vm.CurrentPage = ShellPage.History;
@@ -195,6 +205,7 @@ public class ScreenshotTests
         history.Selected = history.Meetings[0];
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(3, history.Lines.Count);
+        Assert.True(history.HasInsights);
         w.CaptureRenderedFrame()!.Save(Path.Combine(ScreensDir(), "history.png"));
     }
 

@@ -9,10 +9,16 @@ using MeetAgent.Core.Text;
 
 namespace MeetAgent.Desktop.ViewModels;
 
-public sealed record MeetingItem(long Id, string Title, string When, string Duration, string Source, int SegmentCount);
+/// <param name="Source">«Meet» o «Micrófono»: de dónde salió la transcripción.</param>
+/// <param name="HasAnalysis">Si ya tiene un análisis guardado (✓ en la lista).</param>
+public sealed record MeetingItem(long Id, string Title, string When, string Duration, string Source, bool HasAnalysis)
+{
+    public bool IsMeet => Source == "Meet";
+}
 
 /// <param name="Share">0-1, para la barra.</param>
-public sealed record SpeakerRow(string Name, string Time, double Share, string Percent, int Words, int Turns);
+/// <param name="BrushKey">Token del color del hablante (SpeakerYoBrush, Speaker1Brush…).</param>
+public sealed record SpeakerRow(string Name, string Time, double Share, string Percent, int Words, int Turns, string BrushKey);
 
 public sealed record SearchResultItem(long MeetingId, string MeetingTitle, string Time, string Speaker, string Snippet);
 
@@ -22,15 +28,24 @@ public sealed record SearchResultItem(long MeetingId, string MeetingTitle, strin
 /// del usuario y exportar a Markdown.
 /// </summary>
 /// <param name="chat">La IA configurada en la pestaña IA, o null si falta configurarla.</param>
+/// <param name="now">Reloj para decidir si una reunión es de hoy; se inyecta en las pruebas.</param>
 public sealed partial class HistoryViewModel(ITranscriptStore store, string exportDir,
-    IInsightsStore? insights = null, Func<IChatModel?>? chat = null) : ObservableObject
+    IInsightsStore? insights = null, Func<IChatModel?>? chat = null,
+    Func<DateTimeOffset>? now = null) : ObservableObject
 {
+    private readonly Func<DateTimeOffset> _now = now ?? (() => DateTimeOffset.Now);
+
     public ObservableCollection<SpeakerRow> Speakers { get; } = new();
+    public ObservableCollection<InsightSection> InsightBlocks { get; } = new();
     [ObservableProperty] private string? _statsSummary;
-    [ObservableProperty] private string? _insightsText;
     [ObservableProperty] private string? _insightsInfo;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowNoAnalysis))]
+    private bool _hasInsights;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AnalyzeText), nameof(ShowNoAnalysis))]
     [NotifyCanExecuteChangedFor(nameof(AnalyzeCommand))]
     private bool _isAnalyzing;
 
@@ -42,11 +57,20 @@ public sealed partial class HistoryViewModel(ITranscriptStore store, string expo
     [ObservableProperty] private string _query = "";
     [ObservableProperty] private string? _message;
 
+    /// <summary>Texto del botón de análisis, sin jerga ni el modelo conectado.</summary>
+    public string AnalyzeText => IsAnalyzing ? "Analizando…" : "Analizar con IA";
+
+    /// <summary>La reunión elegida todavía no tiene análisis y no se está analizando.</summary>
+    public bool ShowNoAnalysis => Selected is not null && !HasInsights && !IsAnalyzing;
+
     partial void OnSelectedChanged(MeetingItem? value)
     {
         Lines.Clear();
         Speakers.Clear();
-        StatsSummary = InsightsText = InsightsInfo = null;
+        InsightBlocks.Clear();
+        StatsSummary = InsightsInfo = null;
+        HasInsights = false;
+        OnPropertyChanged(nameof(ShowNoAnalysis));
         ExportCommand.NotifyCanExecuteChanged();
         AnalyzeCommand.NotifyCanExecuteChanged();
         if (value is null) return;
@@ -60,9 +84,20 @@ public sealed partial class HistoryViewModel(ITranscriptStore store, string expo
     private void ShowStats(MeetingStats st)
     {
         if (st.Words == 0) return;
-        StatsSummary = $"{TimeFormat.Hms(st.Duration)} · {st.Words} palabras · {st.Turns} intervenciones · {st.Speakers.Count} personas";
+        StatsSummary = $"{TimeFormat.Hms(st.Duration)} · {st.Turns} intervenciones · {st.Speakers.Count} personas";
         foreach (var sp in st.Speakers)
-            Speakers.Add(new SpeakerRow(sp.Speaker, TimeFormat.Hms(sp.TalkTime), sp.Share, $"{sp.Share * 100:F0} %", sp.Words, sp.Turns));
+            Speakers.Add(new SpeakerRow(sp.Speaker, TimeFormat.Hms(sp.TalkTime), sp.Share, $"{sp.Share * 100:F0} %",
+                sp.Words, sp.Turns, BrushKeyFor(sp.Speaker)));
+    }
+
+    /// <summary>Color estable por persona: Yo y Otros tienen token propio; los nombres, la paleta de 6.</summary>
+    private static string BrushKeyFor(string speaker)
+    {
+        if (speaker == nameof(Speaker.Yo)) return "SpeakerYoBrush";
+        if (speaker == nameof(Speaker.Otros)) return "SpeakerOtrosBrush";
+        var hash = 0;
+        foreach (var c in speaker) hash = unchecked(hash * 31 + c) & 0x7FFFFFFF;
+        return $"Speaker{hash % 6 + 1}Brush";
     }
 
     private void ShowInsights(StoredInsights? saved)
@@ -70,8 +105,11 @@ public sealed partial class HistoryViewModel(ITranscriptStore store, string expo
         if (saved is null) return;
         try
         {
-            InsightsText = MeetingInsights.Parse(saved.Json).ToPlainText();
-            InsightsInfo = $"Analizada con {saved.Model} · {saved.CreatedAt:yyyy-MM-dd HH:mm}";
+            var parsed = MeetingInsights.Parse(saved.Json);
+            foreach (var section in parsed.ToSections())
+                InsightBlocks.Add(new InsightSection(section.Title.ToUpperInvariant(), section.Text, section.Items));
+            HasInsights = true;
+            InsightsInfo = $"Analizada el {saved.CreatedAt:dd/MM/yyyy} · {saved.CreatedAt:HH:mm}";
         }
         catch (Exception ex) when (ex is FormatException or System.Text.Json.JsonException)
         {
@@ -102,15 +140,16 @@ public sealed partial class HistoryViewModel(ITranscriptStore store, string expo
         if (model is null) { Message = "Conecta tu IA para analizar esta reunión."; return; }
 
         var segments = store.GetSegments(meetingId);
-        if (segments.Count == 0) { Message = $"La reunión #{meetingId} no tiene texto para analizar."; return; }
+        if (segments.Count == 0) { Message = "Esta reunión no tiene texto para analizar."; return; }
         IsAnalyzing = true;
-        Message = $"Analizando la reunión #{meetingId} con {model.Name}…";
+        Message = "Analizando la reunión…";
         try
         {
             var result = await new MeetingAnalyzer(model).AnalyzeAsync(meeting, segments, CancellationToken.None);
             insights.SaveInsights(meetingId, result.ToJson(), model.Name, DateTimeOffset.Now);
+            MarkAnalyzed(meetingId);
             if (Selected?.Id == meetingId) ShowInsights(insights.GetInsights(meetingId));
-            Message = $"Reunión #{meetingId} analizada.";
+            Message = "Análisis listo.";
         }
         catch (Exception ex)
         {
@@ -122,6 +161,13 @@ public sealed partial class HistoryViewModel(ITranscriptStore store, string expo
         }
     }
 
+    /// <summary>Pone la ✓ en la fila sin recargar el detalle que ya está abierto.</summary>
+    private void MarkAnalyzed(long meetingId)
+    {
+        var index = Meetings.ToList().FindIndex(m => m.Id == meetingId);
+        if (index >= 0) Meetings[index] = Meetings[index] with { HasAnalysis = true };
+    }
+
     /// <summary>Relee la base: la extensión y el bot escriben desde otros procesos.</summary>
     [RelayCommand]
     public void Refresh()
@@ -129,10 +175,18 @@ public sealed partial class HistoryViewModel(ITranscriptStore store, string expo
         var keep = Selected?.Id;
         Meetings.Clear();
         foreach (var m in store.ListMeetings())
-            Meetings.Add(new MeetingItem(m.Id, m.Title, m.StartedAt.ToString("yyyy-MM-dd HH:mm"),
+            Meetings.Add(new MeetingItem(m.Id, m.Title, WhenText(m.StartedAt),
                 m.EndedAt is { } e ? TimeFormat.Hms(e - m.StartedAt) : "en curso",
-                SourceOf(m.Consent), store.GetSegments(m.Id).Count));
+                SourceOf(m.Consent), insights?.GetInsights(m.Id) is not null));
         Selected = keep is null ? null : Meetings.FirstOrDefault(m => m.Id == keep);
+    }
+
+    /// <summary>«HOY · hh:mm» para lo de hoy; fecha completa para lo anterior.</summary>
+    private string WhenText(DateTimeOffset startedAt)
+    {
+        var now = _now();
+        var local = startedAt.ToOffset(now.Offset);
+        return local.Date == now.Date ? $"HOY · {local:HH:mm}" : local.ToString("dd/MM/yyyy · HH:mm");
     }
 
     [RelayCommand]
@@ -174,13 +228,12 @@ public sealed partial class HistoryViewModel(ITranscriptStore store, string expo
         }
         var at = md.IndexOf("## Transcripción", StringComparison.Ordinal);
         File.WriteAllText(path, at >= 0 ? md.Insert(at, extra) : md + "\n" + extra);
-        Message = $"Exportada a {path}";
+        Message = "Reunión exportada a Markdown.";
     }
 
     private static string SourceOf(string consent) => consent switch
     {
-        "subtitulos" => "Subtítulos de Meet",
-        "bot-transcribir" => "Bot de Meet",
+        "subtitulos" or "bot-transcribir" => "Meet",
         "grabar" or "transcribir" => "Micrófono",
         var other => other,
     };

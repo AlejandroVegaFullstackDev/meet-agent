@@ -386,6 +386,36 @@
     <Setter Property="Foreground" Value="{DynamicResource BrandBrush}" />
   </Style>
 
+  <!-- Lista de reuniones: la seleccionada se marca con fondo brand-subtle y borde izquierdo de 2 px. -->
+  <Style Selector="ListBox.history">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="ListBox.history ListBoxItem">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0,0,0,2" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.history ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}" />
+  </Style>
+  <Style Selector="ListBox.history ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.row">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="2,0,0,0" />
+    <Setter Property="CornerRadius" Value="0,8,8,0" />
+    <Setter Property="Padding" Value="10,8" />
+  </Style>
+  <Style Selector="ListBox.history ListBoxItem:selected Border.row">
+    <Setter Property="Background" Value="{DynamicResource BrandSubtleBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
+  </Style>
+
+
   <!-- Barra lateral del shell. -->
   <Style Selector="Border.sidebar">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />

@@ -1,26 +1,28 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:MeetAgent.Desktop.ViewModels"
+             xmlns:analysis="using:MeetAgent.Core.Analysis"
              x:Class="MeetAgent.Desktop.Views.HistoryView"
              x:DataType="vm:HistoryViewModel">
 
-  <!-- Todas las reuniones: micrófono, bot de Meet y subtítulos de la extensión. -->
-  <Grid ColumnDefinitions="300,12,*" Margin="20">
-    <DockPanel>
+  <!-- Todas las reuniones: micrófono y Meet. El detalle muestra el análisis arriba y la transcripción plegada. -->
+  <Grid x:Name="HistoryGrid" ColumnDefinitions="260,12,*" Margin="20">
+    <DockPanel x:Name="MeetingsPane">
       <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
         <TextBox Text="{Binding Query}" PlaceholderText="Buscar en todas las reuniones…" />
-        <Button Grid.Column="1" Content="Buscar" Command="{Binding SearchCommand}" Classes="secondary" Margin="6,0,0,0" />
+        <Button Grid.Column="1" Content="Buscar" Command="{Binding SearchCommand}" Classes="secondary sm" Margin="6,0,0,0" />
       </Grid>
+
       <!-- Resultados de búsqueda (si los hay) -->
-      <ListBox DockPanel.Dock="Top" ItemsSource="{Binding Results}" MaxHeight="200" Margin="0,0,0,8"
+      <ListBox DockPanel.Dock="Top" ItemsSource="{Binding Results}" MaxHeight="180" Margin="0,0,0,8"
                IsVisible="{Binding Results.Count}" x:Name="ResultsList">
         <ListBox.ItemTemplate>
           <DataTemplate x:DataType="vm:SearchResultItem">
             <StackPanel Spacing="1">
-              <TextBlock Classes="caption" Foreground="{DynamicResource InkMutedBrush}">
+              <TextBlock Classes="caption" Foreground="{DynamicResource InkMutedBrush}" TextTrimming="CharacterEllipsis">
                 <TextBlock.Text>
-                  <MultiBinding StringFormat="{}#{0} {1} · [{2}] {3}">
-                    <Binding Path="MeetingId" /><Binding Path="MeetingTitle" /><Binding Path="Time" /><Binding Path="Speaker" />
+                  <MultiBinding StringFormat="{}{0} · [{1}] {2}">
+                    <Binding Path="MeetingTitle" /><Binding Path="Time" /><Binding Path="Speaker" />
                   </MultiBinding>
                 </TextBlock.Text>
               </TextBlock>
@@ -29,67 +31,151 @@
           </DataTemplate>
         </ListBox.ItemTemplate>
       </ListBox>
-      <ListBox ItemsSource="{Binding Meetings}" SelectedItem="{Binding Selected}" x:Name="MeetingsList">
+
+      <TextBlock DockPanel.Dock="Top" Text="Aún no hay reuniones." Classes="body-sm"
+                 Foreground="{DynamicResource InkMutedBrush}" Margin="4,12" IsVisible="{Binding !Meetings.Count}" />
+      <ListBox Classes="history" ItemsSource="{Binding Meetings}" SelectedItem="{Binding Selected}" x:Name="MeetingsList">
         <ListBox.ItemTemplate>
           <DataTemplate x:DataType="vm:MeetingItem">
-            <StackPanel Spacing="1">
-              <TextBlock Text="{Binding Title}" Classes="body-strong" TextTrimming="CharacterEllipsis" />
-              <TextBlock Classes="caption" Foreground="{DynamicResource InkMutedBrush}">
-                <TextBlock.Text>
-                  <MultiBinding StringFormat="{}{0} · {1}">
-                    <Binding Path="When" /><Binding Path="Duration" />
-                  </MultiBinding>
-                </TextBlock.Text>
-              </TextBlock>
-              <TextBlock Classes="caption" Foreground="{DynamicResource InkMutedBrush}">
-                <TextBlock.Text>
-                  <MultiBinding StringFormat="{}{0} · {1} segmentos">
-                    <Binding Path="Source" /><Binding Path="SegmentCount" />
-                  </MultiBinding>
-                </TextBlock.Text>
-              </TextBlock>
-            </StackPanel>
+            <Border Classes="row">
+              <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                <TextBlock Text="{Binding Title}" Classes="body-strong" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="8,0,0,0">
+                  <Border Classes="badge" Classes.meet="{Binding IsMeet}">
+                    <TextBlock Text="{Binding Source}" />
+                  </Border>
+                  <PathIcon Data="{StaticResource IconCheck}" Width="14" Height="14"
+                            Foreground="{DynamicResource SuccessBrush}" IsVisible="{Binding HasAnalysis}"
+                            ToolTip.Tip="Tiene análisis" />
+                </StackPanel>
+                <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Classes="caption" Margin="0,3,0,0"
+                           Foreground="{DynamicResource InkMutedBrush}" TextTrimming="CharacterEllipsis">
+                  <TextBlock.Text>
+                    <MultiBinding StringFormat="{}{0} · {1}">
+                      <Binding Path="When" /><Binding Path="Duration" />
+                    </MultiBinding>
+                  </TextBlock.Text>
+                </TextBlock>
+              </Grid>
+            </Border>
           </DataTemplate>
         </ListBox.ItemTemplate>
       </ListBox>
     </DockPanel>
 
-    <DockPanel Grid.Column="2">
-      <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,8">
-        <TextBlock Text="{Binding Selected.Title, FallbackValue='Elige una reunión'}" Classes="heading-sm"
-                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-        <Button Grid.Column="1" Content="Actualizar" Command="{Binding RefreshCommand}" Classes="secondary sm" Margin="6,0,0,0" />
-        <Button Grid.Column="2" Content="Exportar .md" Command="{Binding ExportCommand}" Classes="secondary sm" Margin="6,0,0,0" />
+    <DockPanel x:Name="DetailPane" Grid.Column="2">
+      <!-- Encabezado: título de la reunión y actualizar -->
+      <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+        <StackPanel Spacing="2" VerticalAlignment="Center">
+          <TextBlock Text="{Binding Selected.Title, FallbackValue='Elige una reunión'}" Classes="heading-md"
+                     TextTrimming="CharacterEllipsis" />
+          <TextBlock Classes="caption" Foreground="{DynamicResource InkMutedBrush}"
+                     IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock.Text>
+              <MultiBinding StringFormat="{}{0} · {1} · {2}">
+                <Binding Path="Selected.When" /><Binding Path="Selected.Duration" /><Binding Path="Selected.Source" />
+              </MultiBinding>
+            </TextBlock.Text>
+          </TextBlock>
+        </StackPanel>
+        <Button Grid.Column="1" Command="{Binding RefreshCommand}" Classes="ghost sm" VerticalAlignment="Center"
+                ToolTip.Tip="Actualizar">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Data="{StaticResource IconHistory}" Width="16" Height="16" />
+            <TextBlock Text="Actualizar" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
       </Grid>
-      <TextBlock DockPanel.Dock="Bottom" Text="{Binding Message}" Classes="caption" Margin="0,8,0,0"
-                 Foreground="{DynamicResource InkMutedBrush}" TextTrimming="CharacterEllipsis" />
-      <Grid RowDefinitions="*,Auto">
-        <Border Classes="card">
-          <ScrollViewer Padding="14,10">
-            <ItemsControl ItemsSource="{Binding Lines}" ItemTemplate="{StaticResource LineTemplate}" />
-          </ScrollViewer>
-        </Border>
 
-        <!-- Estadísticas (locales, sin IA) y análisis con la IA del usuario -->
-        <Border Grid.Row="1" Classes="card" Margin="0,8,0,0"
-                IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
-          <Expander Header="Estadísticas y análisis" IsExpanded="True" HorizontalAlignment="Stretch">
-            <ScrollViewer MaxHeight="320">
-              <StackPanel Spacing="8" Margin="4,0,4,4">
-                <TextBlock Text="{Binding StatsSummary}" Classes="caption" Foreground="{DynamicResource InkMutedBrush}" />
+      <!-- Barra fija: analizar y exportar -->
+      <Border DockPanel.Dock="Bottom" Classes="card" Margin="0,12,0,0" Padding="12,10"
+              IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <Grid ColumnDefinitions="*,Auto,Auto">
+          <TextBlock Text="{Binding Message}" Classes="caption" Foreground="{DynamicResource InkMutedBrush}"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,12,0" />
+          <Button Grid.Column="1" Content="{Binding AnalyzeText}" Command="{Binding AnalyzeCommand}" Classes="secondary sm" />
+          <Button Grid.Column="2" Content="Exportar .md" Command="{Binding ExportCommand}" Classes="secondary sm" Margin="8,0,0,0" />
+        </Grid>
+      </Border>
+
+      <Grid>
+        <TextBlock Text="Elige una reunión para ver su análisis y transcripción." Classes="body"
+                   Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="280" TextAlignment="Center"
+                   IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNull}}" />
+
+        <ScrollViewer IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <StackPanel Spacing="12">
+            <!-- Análisis con IA, arriba y sin plegar -->
+            <Border Classes="card" Padding="16">
+              <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="ANÁLISIS" Classes="section" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="{Binding InsightsInfo}" Classes="caption"
+                             Foreground="{DynamicResource InkMutedBrush}" VerticalAlignment="Center"
+                             TextTrimming="CharacterEllipsis" IsVisible="{Binding HasInsights}" />
+                </Grid>
+
+                <ItemsControl ItemsSource="{Binding InsightBlocks}" IsVisible="{Binding HasInsights}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="analysis:InsightSection">
+                      <StackPanel Spacing="3" Margin="0,0,0,10">
+                        <TextBlock Text="{Binding Title}" Classes="section" />
+                        <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" Classes="body"
+                                             IsVisible="{Binding HasText}" />
+                        <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding HasItems}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:CompileBindings="False">
+                              <Grid ColumnDefinitions="Auto,*" Margin="0,2">
+                                <Ellipse Width="4" Height="4" Fill="{DynamicResource InkMutedBrush}"
+                                         VerticalAlignment="Top" Margin="0,8,8,0" />
+                                <SelectableTextBlock Grid.Column="1" Text="{Binding}" TextWrapping="Wrap" Classes="body" />
+                              </Grid>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Text="Esta reunión no tiene análisis todavía." Classes="body-sm"
+                           Foreground="{DynamicResource InkMutedBrush}" IsVisible="{Binding ShowNoAnalysis}" />
+                <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsAnalyzing}">
+                  <TextBlock Text="Analizando…" Classes="body-sm" Foreground="{DynamicResource BrandBrush}" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <!-- Participación, calculada en el equipo (sin IA) -->
+            <Border Classes="card" Padding="16" IsVisible="{Binding Speakers.Count}">
+              <StackPanel Spacing="8">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="PARTICIPACIÓN" Classes="section" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="{Binding StatsSummary}" Classes="caption"
+                             Foreground="{DynamicResource InkMutedBrush}" VerticalAlignment="Center"
+                             TextTrimming="CharacterEllipsis" />
+                </Grid>
                 <ItemsControl ItemsSource="{Binding Speakers}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:SpeakerRow">
-                      <Grid ColumnDefinitions="150,*,52,70,110" Margin="0,2">
-                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                        <ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding Share}" Classes="share"
-                                     VerticalAlignment="Center" Margin="8,0" />
+                      <Grid ColumnDefinitions="Auto,*,Auto,Auto" RowDefinitions="Auto,Auto" Margin="0,4">
+                        <Ellipse Width="8" Height="8" VerticalAlignment="Center"
+                                 Fill="{Binding BrushKey, Converter={StaticResource BrushKey}}" />
+                        <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="body-sm" Margin="8,0,12,0"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                         <TextBlock Grid.Column="2" Text="{Binding Percent}" Classes="body-strong" VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="3" Text="{Binding Time}" Classes="timestamp" VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="4" Classes="caption" VerticalAlignment="Center"
+                        <TextBlock Grid.Column="3" Text="{Binding Time}" Classes="timestamp" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" />
+                        <ProgressBar Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Minimum="0" Maximum="1"
+                                     Value="{Binding Share}" Classes="share"
+                                     Foreground="{Binding BrushKey, Converter={StaticResource BrushKey}}"
+                                     VerticalAlignment="Center" Margin="8,4,12,0" />
+                        <TextBlock Grid.Row="1" Grid.Column="3" Classes="caption" VerticalAlignment="Center"
+                                   HorizontalAlignment="Right" Margin="10,2,0,0"
                                    Foreground="{DynamicResource InkMutedBrush}">
                           <TextBlock.Text>
-                            <MultiBinding StringFormat="{}{0} pal. · {1} interv.">
+                            <MultiBinding StringFormat="{}{0} pal. · {1} int.">
                               <Binding Path="Words" /><Binding Path="Turns" />
                             </MultiBinding>
                           </TextBlock.Text>
@@ -98,18 +184,23 @@
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Text="{Binding InsightsInfo}" Classes="caption" VerticalAlignment="Center"
-                             Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
-                  <Button Grid.Column="1" Content="Analizar con IA" Command="{Binding AnalyzeCommand}"
-                          Classes="secondary sm" Margin="8,0,0,0" />
-                </Grid>
-                <SelectableTextBlock Text="{Binding InsightsText}" TextWrapping="Wrap"
-                                     IsVisible="{Binding InsightsText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
               </StackPanel>
-            </ScrollViewer>
-          </Expander>
-        </Border>
+            </Border>
+
+            <!-- Transcripción completa, plegada para no tapar el análisis -->
+            <Border Classes="card" Padding="16">
+              <StackPanel Spacing="8">
+                <Expander Header="Ver transcripción completa" HorizontalAlignment="Stretch">
+                  <ScrollViewer MaxHeight="360" Margin="0,8,0,0">
+                    <ItemsControl ItemsSource="{Binding Lines}" ItemTemplate="{StaticResource LineTemplate}" />
+                  </ScrollViewer>
+                </Expander>
+                <TextBlock Text="Esta reunión no tiene transcripción." Classes="body-sm"
+                           Foreground="{DynamicResource InkMutedBrush}" IsVisible="{Binding !Lines.Count}" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
       </Grid>
     </DockPanel>
   </Grid>
