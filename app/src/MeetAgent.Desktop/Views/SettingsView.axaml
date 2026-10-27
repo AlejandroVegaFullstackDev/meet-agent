@@ -4,30 +4,110 @@
              x:Class="MeetAgent.Desktop.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
 
-  <ScrollViewer>
-    <StackPanel Margin="20" Spacing="20" MaxWidth="660" HorizontalAlignment="Left">
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="20" Spacing="16" MaxWidth="660" HorizontalAlignment="Stretch">
       <TextBlock Text="Ajustes" Classes="display" />
 
+      <!-- Tu IA: la misma conexión de la página «Conecta tu IA». -->
       <Border Classes="card" Padding="16">
-        <StackPanel Spacing="8">
+        <StackPanel Spacing="10">
           <TextBlock Text="TU IA" Classes="section" />
-          <TextBlock Text="{Binding AiName}" Classes="body-strong" />
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Border Width="32" Height="32" CornerRadius="8" Background="{DynamicResource SurfaceSubtleBrush}"
+                    VerticalAlignment="Center">
+              <PathIcon Data="{StaticResource IconSparkle}" Width="16" Height="16"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Foreground="{DynamicResource BrandBrush}" />
+            </Border>
+            <StackPanel Grid.Column="1" Spacing="1" Margin="12,0,12,0" VerticalAlignment="Center">
+              <TextBlock Text="{Binding AiName}" Classes="heading-sm" TextTrimming="CharacterEllipsis" />
+              <TextBlock Text="{Binding AiStatus}" Classes="caption" Foreground="{DynamicResource InkMutedBrush}" />
+            </StackPanel>
+            <Button Grid.Column="2" Content="Cambiar" Command="{Binding ChangeAiCommand}"
+                    Classes="secondary sm" VerticalAlignment="Center" />
+          </Grid>
+          <TextBlock Text="Con esta IA se analizan tus reuniones." Classes="body-sm"
+                     Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap"
+                     IsVisible="{Binding HasUsableAi}" />
         </StackPanel>
       </Border>
 
+      <!-- Transcriptor: Groq, OpenAI o un servidor propio. -->
+      <Border Classes="card" Padding="16">
+        <StackPanel Spacing="10">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="TRANSCRIPTOR" Classes="section" VerticalAlignment="Center" />
+            <Border Grid.Column="1" Classes="badge success" IsVisible="{Binding HasTranscriber}">
+              <TextBlock Text="{Binding TranscriptionName}" />
+            </Border>
+            <Border Grid.Column="1" Classes="badge warning" IsVisible="{Binding NeedsTranscriber}">
+              <TextBlock Text="Sin conectar" />
+            </Border>
+          </Grid>
+          <TextBlock Text="Para grabar llamadas con audio, conecta también un transcriptor. Groq es gratis."
+                     Classes="body-sm" Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap"
+                     IsVisible="{Binding NeedsTranscriber}" />
+          <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding NeedsTranscriber}">
+            <TextBlock Text="Solo guarda el texto. El audio no se escribe." Classes="caption"
+                       Foreground="{DynamicResource InkMutedBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+            <Button Grid.Column="1" Content="Configurar" Command="{Binding OpenTranscriptionCommand}"
+                    Classes="secondary sm" Margin="8,0,0,0" />
+          </Grid>
+
+          <Expander Header="Configurar transcriptor" IsExpanded="{Binding IsTranscriptionOpen, Mode=TwoWay}"
+                    HorizontalAlignment="Stretch">
+            <StackPanel Spacing="8" Margin="0,8,0,0">
+              <ComboBox ItemsSource="{Binding TranscriptionOptions}"
+                        SelectedItem="{Binding SelectedTranscriptionOption}"
+                        HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:TranscriptionOption">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBox Text="{Binding TranscriptionKey}" PasswordChar="•" PlaceholderText="API key"
+                       IsVisible="{Binding ShowTranscriptionKey}" />
+              <TextBox Text="{Binding TranscriptionBaseUrl}" PlaceholderText="Dirección (http://localhost:8000/v1)"
+                       IsVisible="{Binding ShowTranscriptionServer}" />
+              <TextBox Text="{Binding TranscriptionModel}" PlaceholderText="Nombre del modelo"
+                       IsVisible="{Binding ShowTranscriptionServer}" />
+              <TextBlock Text="{Binding TranscriptionHint}" Classes="caption"
+                         Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Guardar" Command="{Binding SaveTranscriptionCommand}" Classes="primary sm" />
+                <Button Content="Quitar" Command="{Binding RemoveTranscriptionCommand}" Classes="ghost sm"
+                        IsVisible="{Binding HasTranscriber}" />
+              </StackPanel>
+              <TextBlock Text="{Binding TranscriptionMessage}" Classes="caption"
+                         Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap"
+                         IsVisible="{Binding TranscriptionMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+          </Expander>
+        </StackPanel>
+      </Border>
+
+      <!-- Análisis automático al terminar. -->
       <Border Classes="card" Padding="16">
         <StackPanel Spacing="8">
           <TextBlock Text="REUNIONES" Classes="section" />
           <CheckBox IsChecked="{Binding AnalyzeWhenMeetingEnds}"
                     Content="Analizar cada reunión al terminar" />
+          <TextBlock Text="La IA resume lo importante y lo deja en el historial." Classes="caption"
+                     Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
         </StackPanel>
       </Border>
 
+      <!-- Privacidad: sin servidores propios. -->
       <Border Classes="card" Padding="16">
-        <StackPanel Spacing="4">
+        <StackPanel Spacing="8">
           <TextBlock Text="PRIVACIDAD" Classes="section" />
-          <TextBlock Text="El audio y las transcripciones se quedan en este equipo."
-                     Classes="body-sm" Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
+          <TextBlock Text="El audio y las transcripciones se quedan en este equipo." Classes="body-sm"
+                     Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding DataPath, StringFormat='Datos en {0}'}" Classes="caption"
+                     Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
+          <Button Content="Ver política de privacidad" Command="{Binding OpenPrivacyCommand}"
+                  Classes="ghost sm" HorizontalAlignment="Left" Padding="0" />
         </StackPanel>
       </Border>
     </StackPanel>

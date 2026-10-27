@@ -3,7 +3,9 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using MeetAgent.Ai;
 using MeetAgent.Core;
 using MeetAgent.Core.Analysis;
 using MeetAgent.Desktop.ViewModels;
@@ -129,17 +131,23 @@ public class ConsentDialogTests
     private static void Click(ConsentDialog d, string name) =>
         d.FindControl<Button>(name)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
+    private static void Choose(ConsentDialog d, string name) =>
+        d.FindControl<RadioButton>(name)!.IsChecked = true;
+
     [AvaloniaFact]
-    public async Task Cada_boton_devuelve_su_opcion()
+    public async Task Cada_opcion_se_confirma_con_Empezar()
     {
-        Assert.Equal(Consent.RecordAndTranscribe, await Answer(d => Click(d, "RecordButton")));
-        Assert.Equal(Consent.TranscribeOnly, await Answer(d => Click(d, "TranscribeButton")));
-        Assert.Equal(Consent.None, await Answer(d => Click(d, "NothingButton")));
+        Assert.Equal(Consent.RecordAndTranscribe,
+            await Answer(d => { Choose(d, "RecordButton"); Click(d, "StartButton"); }));
+        Assert.Equal(Consent.TranscribeOnly, await Answer(d => Click(d, "StartButton")));
+        Assert.Equal(Consent.None,
+            await Answer(d => { Choose(d, "NothingButton"); Click(d, "StartButton"); }));
     }
 
     [AvaloniaFact]
-    public async Task Esc_o_cerrar_la_ventana_equivalen_a_Nada()
+    public async Task Cancelar_Esc_o_cerrar_la_ventana_equivalen_a_Nada()
     {
+        Assert.Equal(Consent.None, await Answer(d => Click(d, "CancelButton")));
         Assert.Equal(Consent.None, await Answer(d => d.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null)));
         Assert.Equal(Consent.None, await Answer(d => d.Close()));
     }
@@ -164,13 +172,13 @@ public class ScreenshotTests
             ui: a => Dispatcher.UIThread.Post(a));
         var w = new MainWindow { DataContext = vm };
         w.Show();
-        w.CaptureRenderedFrame()!.Save(Path.Combine(ScreensDir(), "main-idle.png"));
+        w.CaptureRenderedFrame()!.Save(Path.Combine(ScreensDir(), "main-idle.png"), PngBitmapEncoderOptions.Default);
         await vm.ToggleCommand.ExecuteAsync(null);
         await MainViewModelTests.WaitUntil(() => vm.Lines.Count >= 6);
         Dispatcher.UIThread.RunJobs();
         var frame = w.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save(Path.Combine(ScreensDir(), "main-live.png"));
+        frame!.Save(Path.Combine(ScreensDir(), "main-live.png"), PngBitmapEncoderOptions.Default);
         await vm.ToggleCommand.ExecuteAsync(null);
     }
 
@@ -206,7 +214,7 @@ public class ScreenshotTests
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(3, history.Lines.Count);
         Assert.True(history.HasInsights);
-        w.CaptureRenderedFrame()!.Save(Path.Combine(ScreensDir(), "history.png"));
+        w.CaptureRenderedFrame()!.Save(Path.Combine(ScreensDir(), "history.png"), PngBitmapEncoderOptions.Default);
     }
 
     [AvaloniaFact]
@@ -214,13 +222,34 @@ public class ScreenshotTests
     {
         var vm = new MainViewModel(Fakes.Session(new Fakes.Store(), new Fakes.Recorders()), "sin configurar", () => Task.FromResult(Consent.None))
         {
-            Connect = new ConnectViewModel(new MeetAgent.Ai.AiSettings(), _ => { }),
+            Connect = new ConnectViewModel(new AiSettings(), _ => { }),
         };
         vm.CurrentPage = ShellPage.Connect;
         var w = new MainWindow { DataContext = vm };
         w.Show();
         Dispatcher.UIThread.RunJobs();
-        w.CaptureRenderedFrame()!.Save(Path.Combine(ScreensDir(), "ia.png"));
+        w.CaptureRenderedFrame()!.Save(Path.Combine(ScreensDir(), "ia.png"), PngBitmapEncoderOptions.Default);
+    }
+
+    [AvaloniaFact]
+    public void Pagina_ajustes()
+    {
+        var settings = new SettingsViewModel(
+            new AiSettings(new Connection(AiProvider.OpenAI, "gpt-5-mini", "sk-demo"),
+                new Connection(AiProvider.Groq, "whisper-large-v3-turbo", "gsk-demo")),
+            _ => { }, dataDir: "C:\\Users\\tu-usuario\\MeetAgent")
+        {
+            IsTranscriptionOpen = true,
+        };
+        var vm = new MainViewModel(Fakes.Session(new Fakes.Store(), new Fakes.Recorders()), "sin configurar", () => Task.FromResult(Consent.None))
+        {
+            Settings = settings,
+        };
+        vm.CurrentPage = ShellPage.Settings;
+        var w = new MainWindow { DataContext = vm };
+        w.Show();
+        Dispatcher.UIThread.RunJobs();
+        w.CaptureRenderedFrame()!.Save(Path.Combine(ScreensDir(), "ajustes.png"), PngBitmapEncoderOptions.Default);
     }
 
     [AvaloniaFact]
@@ -231,7 +260,7 @@ public class ScreenshotTests
         var d = new ConsentDialog();
         _ = d.ShowDialog<Consent?>(owner);
         Dispatcher.UIThread.RunJobs();
-        d.CaptureRenderedFrame()!.Save(Path.Combine(ScreensDir(), "consent.png"));
+        d.CaptureRenderedFrame()!.Save(Path.Combine(ScreensDir(), "consent.png"), PngBitmapEncoderOptions.Default);
         d.Close();
     }
 }

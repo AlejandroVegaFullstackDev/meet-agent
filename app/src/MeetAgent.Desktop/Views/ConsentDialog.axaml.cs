@@ -6,8 +6,8 @@ using MeetAgent.Core;
 namespace MeetAgent.Desktop.Views;
 
 /// <summary>
-/// Pregunta antes de cada reunión. Cerrar la ventana o pulsar Esc equivale a «Nada»:
-/// sin un sí explícito no se captura ni se escribe audio.
+/// Pregunta antes de cada reunión. La opción marcada se confirma con «Empezar»;
+/// cerrar la ventana, «Cancelar» o Esc equivalen a «Nada»: sin un sí explícito no se captura nada.
 /// </summary>
 public sealed partial class ConsentDialog : Window
 {
@@ -24,9 +24,12 @@ public sealed partial class ConsentDialog : Window
         return result ?? Consent.None;
     }
 
-    private void OnRecord(object? sender, RoutedEventArgs e) => Close(Consent.RecordAndTranscribe);
-    private void OnTranscribe(object? sender, RoutedEventArgs e) => Close(Consent.TranscribeOnly);
-    private void OnNothing(object? sender, RoutedEventArgs e) => Close(Consent.None);
+    private void OnStart(object? sender, RoutedEventArgs e) =>
+        Close(RecordButton.IsChecked == true ? Consent.RecordAndTranscribe
+            : NothingButton.IsChecked == true ? Consent.None
+            : Consent.TranscribeOnly);
+
+    private void OnCancel(object? sender, RoutedEventArgs e) => Close(Consent.None);
 
     protected override void OnKeyDown(KeyEventArgs e)
     {

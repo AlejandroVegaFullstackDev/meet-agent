@@ -132,6 +132,8 @@ public sealed partial class MainViewModel : ObservableObject
             connect.Changed += RefreshAiState;
             connect.StartRequested += () => CurrentPage = ShellPage.Record;
         }
+        if (Settings is { } settings)
+            settings.ChangeAiRequested += () => CurrentPage = ShellPage.Connect;
         if (History is { } history)
         {
             history.Meetings.CollectionChanged += (_, _) => RefreshLastMeeting();

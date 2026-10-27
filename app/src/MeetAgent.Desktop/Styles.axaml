@@ -435,6 +435,25 @@
     <Setter Property="Padding" Value="0" />
   </Style>
 
+  <!-- Plegables: el encabezado usa la superficie de la tarjeta también en tema oscuro. -->
+  <Style Selector="Expander">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+  </Style>
+  <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+    <Setter Property="CornerRadius" Value="8" />
+  </Style>
+  <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:pointerover /template/ Border#ToggleButtonBackground">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+  </Style>
+
+
   <!-- Formularios. -->
   <Style Selector="TextBox">
     <Setter Property="MinHeight" Value="36" />
@@ -472,6 +491,24 @@
     <Setter Property="CornerRadius" Value="8" />
   </Style>
   <Style Selector="Button.choice.selected">
+    <Setter Property="Background" Value="{DynamicResource BrandSubtleBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
+  </Style>
+
+  <!-- Las tres opciones del consentimiento, con radio grande y fondo cuando están marcadas. -->
+  <Style Selector="RadioButton.choice">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Padding" Value="12,10" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+  </Style>
+  <Style Selector="RadioButton.choice:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}" />
+  </Style>
+  <Style Selector="RadioButton.choice:checked">
     <Setter Property="Background" Value="{DynamicResource BrandSubtleBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
   </Style>

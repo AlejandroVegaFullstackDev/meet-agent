@@ -10,7 +10,10 @@
     <DockPanel x:Name="MeetingsPane">
       <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
         <TextBox Text="{Binding Query}" PlaceholderText="Buscar en todas las reuniones…" />
-        <Button Grid.Column="1" Content="Buscar" Command="{Binding SearchCommand}" Classes="secondary sm" Margin="6,0,0,0" />
+        <Button Grid.Column="1" Command="{Binding SearchCommand}" Classes="secondary sm" Margin="6,0,0,0"
+                Width="32" Padding="0" ToolTip.Tip="Buscar">
+          <PathIcon Data="{StaticResource IconSearch}" Width="16" Height="16" />
+        </Button>
       </Grid>
 
       <!-- Resultados de búsqueda (si los hay) -->

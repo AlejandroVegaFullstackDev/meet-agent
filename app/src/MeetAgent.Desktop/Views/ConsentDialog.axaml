@@ -2,37 +2,49 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="MeetAgent.Desktop.Views.ConsentDialog"
         Title="Antes de empezar"
-        Width="440" SizeToContent="Height" CanResize="False"
+        Width="400" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
-        Background="{DynamicResource SurfaceBrush}">
-  <StackPanel Margin="20" Spacing="14">
-    <StackPanel Spacing="4">
-      <TextBlock Text="¿Qué hago con esta reunión?" FontSize="18" FontWeight="SemiBold" />
-      <TextBlock Classes="muted" TextWrapping="Wrap"
-                 Text="Avisa a las demás personas antes de transcribir o grabar. El audio se envía al servicio de transcripción que elegiste en la pestaña IA; el texto y la grabación quedan en este equipo." />
-    </StackPanel>
+        Background="Transparent" TransparencyLevelHint="Transparent">
+  <Border CornerRadius="16" Background="{DynamicResource SurfaceBrush}"
+          BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+          BoxShadow="0 8 24 0 #33000000" ClipToBounds="True">
+    <StackPanel Margin="20" Spacing="16">
+      <StackPanel Spacing="4">
+        <TextBlock Text="¿Qué hago con esta reunión?" Classes="heading-md" TextWrapping="Wrap" />
+        <TextBlock Text="Avisa a los demás antes de empezar." Classes="body-sm"
+                   Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
+      </StackPanel>
 
-    <StackPanel Spacing="8">
-      <Button x:Name="RecordButton" Classes="choice" Click="OnRecord">
-        <StackPanel Spacing="2">
-          <TextBlock Text="Grabar y transcribir" FontWeight="SemiBold" />
-          <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
-                     Text="Guarda el audio (un archivo por canal) y la transcripción." />
-        </StackPanel>
-      </Button>
-      <Button x:Name="TranscribeButton" Classes="choice accent" Click="OnTranscribe">
-        <StackPanel Spacing="2">
-          <TextBlock Text="Solo transcribir" FontWeight="SemiBold" />
-          <TextBlock FontSize="12" TextWrapping="Wrap" Opacity="0.85"
-                     Text="El audio no se escribe en disco; solo se guarda el texto." />
-        </StackPanel>
-      </Button>
-      <Button x:Name="NothingButton" Classes="choice" Click="OnNothing">
-        <StackPanel Spacing="2">
-          <TextBlock Text="Nada" FontWeight="SemiBold" />
-          <TextBlock Classes="muted" FontSize="12" Text="No escucho ni guardo nada." />
-        </StackPanel>
-      </Button>
+      <StackPanel Spacing="8">
+        <RadioButton x:Name="RecordButton" GroupName="Consent" Classes="choice">
+          <StackPanel Spacing="2">
+            <TextBlock Text="Grabar y transcribir" Classes="body-strong" />
+            <TextBlock Text="Guarda el audio y el texto en tu equipo." Classes="body-sm"
+                       Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
+          </StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="TranscribeButton" GroupName="Consent" Classes="choice" IsChecked="True">
+          <StackPanel Spacing="2">
+            <TextBlock Text="Solo transcribir" Classes="body-strong" />
+            <TextBlock Text="Solo guarda el texto. El audio no se escribe." Classes="body-sm"
+                       Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
+          </StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="NothingButton" GroupName="Consent" Classes="choice">
+          <StackPanel Spacing="2">
+            <TextBlock Text="Nada" Classes="body-strong" />
+            <TextBlock Text="No escucho ni guardo nada esta vez." Classes="body-sm"
+                       Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
+          </StackPanel>
+        </RadioButton>
+      </StackPanel>
+
+      <Grid ColumnDefinitions="*,Auto,Auto">
+        <Button x:Name="CancelButton" Grid.Column="1" Content="Cancelar" Classes="secondary"
+                Click="OnCancel" Margin="0,0,8,0" />
+        <Button x:Name="StartButton" Grid.Column="2" Content="Empezar" Classes="primary"
+                Click="OnStart" />
+      </Grid>
     </StackPanel>
-  </StackPanel>
+  </Border>
 </Window>
