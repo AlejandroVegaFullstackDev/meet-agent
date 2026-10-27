@@ -2,54 +2,375 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <Styles.Resources>
     <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://MeetAgent/Icons.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+
+      <!-- Tokens del diseño (docs/design/plan-rediseno.md). Nada de colores sueltos en las vistas. -->
       <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
           <SolidColorBrush x:Key="SurfaceBrush" Color="#F6F7F9" />
-          <SolidColorBrush x:Key="CardBrush" Color="#FFFFFF" />
-          <SolidColorBrush x:Key="BorderSubtleBrush" Color="#E3E6EA" />
-          <SolidColorBrush x:Key="MutedBrush" Color="#6B7280" />
-          <SolidColorBrush x:Key="YoBrush" Color="#6D28D9" />
-          <SolidColorBrush x:Key="YoSoftBrush" Color="#EFE7FD" />
-          <SolidColorBrush x:Key="OtrosBrush" Color="#B45309" />
-          <SolidColorBrush x:Key="OtrosSoftBrush" Color="#FDF1E3" />
+          <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="SurfaceSubtleBrush" Color="#EEEEF2" />
+          <SolidColorBrush x:Key="InkBrush" Color="#111318" />
+          <SolidColorBrush x:Key="InkMutedBrush" Color="#60646E" />
+          <SolidColorBrush x:Key="InkFaintBrush" Color="#9396A0" />
+          <SolidColorBrush x:Key="BrandBrush" Color="#6D28D9" />
+          <SolidColorBrush x:Key="BrandHoverBrush" Color="#5B21B6" />
+          <SolidColorBrush x:Key="BrandSubtleBrush" Color="#EDE9FE" />
+          <SolidColorBrush x:Key="OnBrandBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="FocusBrush" Color="#6D28D9" />
+          <SolidColorBrush x:Key="SpeakerYoBrush" Color="#6D28D9" />
+          <SolidColorBrush x:Key="SpeakerYoSubtleBrush" Color="#EDE9FE" />
+          <SolidColorBrush x:Key="SpeakerOtrosBrush" Color="#B45309" />
+          <SolidColorBrush x:Key="SpeakerOtrosSubtleBrush" Color="#FEF3C7" />
           <SolidColorBrush x:Key="LiveBrush" Color="#DC2626" />
-          <SolidColorBrush x:Key="IdleBrush" Color="#9CA3AF" />
+          <SolidColorBrush x:Key="LiveSubtleBrush" Color="#FEF2F2" />
+          <SolidColorBrush x:Key="SuccessBrush" Color="#15803D" />
+          <SolidColorBrush x:Key="SuccessSubtleBrush" Color="#F0FDF4" />
+          <SolidColorBrush x:Key="WarningBrush" Color="#B45309" />
+          <SolidColorBrush x:Key="WarningSubtleBrush" Color="#FFFBEB" />
+          <SolidColorBrush x:Key="BorderBrush" Color="#D8D9DF" />
+          <SolidColorBrush x:Key="BorderStrongBrush" Color="#ACADB6" />
+          <!-- Extras del plan: badge «Meet» y 6 colores para hablantes con nombre. -->
+          <SolidColorBrush x:Key="MeetBrush" Color="#2563EB" />
+          <SolidColorBrush x:Key="MeetSubtleBrush" Color="#EFF6FF" />
+          <SolidColorBrush x:Key="Speaker1Brush" Color="#0F766E" />
+          <SolidColorBrush x:Key="Speaker2Brush" Color="#1D4ED8" />
+          <SolidColorBrush x:Key="Speaker3Brush" Color="#BE185D" />
+          <SolidColorBrush x:Key="Speaker4Brush" Color="#4D7C0F" />
+          <SolidColorBrush x:Key="Speaker5Brush" Color="#0E7490" />
+          <SolidColorBrush x:Key="Speaker6Brush" Color="#9A3412" />
+
+          <!-- Nombres anteriores: se retiran cuando todas las vistas usen los tokens nuevos. -->
+          <SolidColorBrush x:Key="CardBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="BorderSubtleBrush" Color="#D8D9DF" />
+          <SolidColorBrush x:Key="MutedBrush" Color="#60646E" />
+          <SolidColorBrush x:Key="YoBrush" Color="#6D28D9" />
+          <SolidColorBrush x:Key="YoSoftBrush" Color="#EDE9FE" />
+          <SolidColorBrush x:Key="OtrosBrush" Color="#B45309" />
+          <SolidColorBrush x:Key="OtrosSoftBrush" Color="#FEF3C7" />
+          <SolidColorBrush x:Key="IdleBrush" Color="#9396A0" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
           <SolidColorBrush x:Key="SurfaceBrush" Color="#14171C" />
+          <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#1C2027" />
+          <SolidColorBrush x:Key="SurfaceSubtleBrush" Color="#1E2229" />
+          <SolidColorBrush x:Key="InkBrush" Color="#F0F1F4" />
+          <SolidColorBrush x:Key="InkMutedBrush" Color="#8A8F9B" />
+          <SolidColorBrush x:Key="InkFaintBrush" Color="#5A5E6A" />
+          <SolidColorBrush x:Key="BrandBrush" Color="#7C3AED" />
+          <SolidColorBrush x:Key="BrandHoverBrush" Color="#6D28D9" />
+          <SolidColorBrush x:Key="BrandSubtleBrush" Color="#1E1535" />
+          <SolidColorBrush x:Key="OnBrandBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="FocusBrush" Color="#7C3AED" />
+          <SolidColorBrush x:Key="SpeakerYoBrush" Color="#7C3AED" />
+          <SolidColorBrush x:Key="SpeakerYoSubtleBrush" Color="#1E1535" />
+          <SolidColorBrush x:Key="SpeakerOtrosBrush" Color="#D97706" />
+          <SolidColorBrush x:Key="SpeakerOtrosSubtleBrush" Color="#1C1008" />
+          <SolidColorBrush x:Key="LiveBrush" Color="#EF4444" />
+          <SolidColorBrush x:Key="LiveSubtleBrush" Color="#1C0808" />
+          <SolidColorBrush x:Key="SuccessBrush" Color="#22C55E" />
+          <SolidColorBrush x:Key="SuccessSubtleBrush" Color="#061209" />
+          <SolidColorBrush x:Key="WarningBrush" Color="#F59E0B" />
+          <SolidColorBrush x:Key="WarningSubtleBrush" Color="#1C1204" />
+          <SolidColorBrush x:Key="BorderBrush" Color="#2A2F38" />
+          <SolidColorBrush x:Key="BorderStrongBrush" Color="#3D4250" />
+          <SolidColorBrush x:Key="MeetBrush" Color="#3B82F6" />
+          <SolidColorBrush x:Key="MeetSubtleBrush" Color="#0C1A33" />
+          <SolidColorBrush x:Key="Speaker1Brush" Color="#2DD4BF" />
+          <SolidColorBrush x:Key="Speaker2Brush" Color="#60A5FA" />
+          <SolidColorBrush x:Key="Speaker3Brush" Color="#F472B6" />
+          <SolidColorBrush x:Key="Speaker4Brush" Color="#A3E635" />
+          <SolidColorBrush x:Key="Speaker5Brush" Color="#22D3EE" />
+          <SolidColorBrush x:Key="Speaker6Brush" Color="#FB923C" />
+
           <SolidColorBrush x:Key="CardBrush" Color="#1C2027" />
-          <SolidColorBrush x:Key="BorderSubtleBrush" Color="#2B313A" />
-          <SolidColorBrush x:Key="MutedBrush" Color="#9AA3AF" />
-          <SolidColorBrush x:Key="YoBrush" Color="#C4B5FD" />
-          <SolidColorBrush x:Key="YoSoftBrush" Color="#2E1F4D" />
-          <SolidColorBrush x:Key="OtrosBrush" Color="#F2B36B" />
-          <SolidColorBrush x:Key="OtrosSoftBrush" Color="#3A2A17" />
-          <SolidColorBrush x:Key="LiveBrush" Color="#F87171" />
-          <SolidColorBrush x:Key="IdleBrush" Color="#6B7280" />
+          <SolidColorBrush x:Key="BorderSubtleBrush" Color="#2A2F38" />
+          <SolidColorBrush x:Key="MutedBrush" Color="#8A8F9B" />
+          <SolidColorBrush x:Key="YoBrush" Color="#7C3AED" />
+          <SolidColorBrush x:Key="YoSoftBrush" Color="#1E1535" />
+          <SolidColorBrush x:Key="OtrosBrush" Color="#D97706" />
+          <SolidColorBrush x:Key="OtrosSoftBrush" Color="#1C1008" />
+          <SolidColorBrush x:Key="IdleBrush" Color="#5A5E6A" />
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
     </ResourceDictionary>
   </Styles.Resources>
 
-  <Style Selector="TextBlock.muted">
-    <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
-  </Style>
-  <Style Selector="TextBlock.mono">
-    <Setter Property="FontFamily" Value="Cascadia Mono, DejaVu Sans Mono, Consolas, monospace" />
-    <Setter Property="FontSize" Value="12" />
-  </Style>
-  <Style Selector="Border.card">
-    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="10" />
+  <!-- Tipografía del diseño. Inter se carga en Program.cs (WithInterFont). -->
+  <Style Selector="Window">
+    <Setter Property="FontFamily" Value="Inter, Segoe UI, DejaVu Sans, sans-serif" />
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
   </Style>
 
-  <!-- Opción del diálogo de consentimiento: botón con título y descripción -->
+  <Style Selector="TextBlock.caption">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontWeight" Value="Normal" />
+  </Style>
+  <Style Selector="TextBlock.label">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+  <Style Selector="TextBlock.body-sm">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="FontWeight" Value="Normal" />
+  </Style>
+  <Style Selector="TextBlock.body">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="LineHeight" Value="20" />
+    <Setter Property="FontWeight" Value="Normal" />
+  </Style>
+  <Style Selector="TextBlock.body-strong">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="LineHeight" Value="20" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.heading-sm">
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="LineHeight" Value="22" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.heading-md">
+    <Setter Property="FontSize" Value="20" />
+    <Setter Property="LineHeight" Value="28" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.display">
+    <Setter Property="FontSize" Value="28" />
+    <Setter Property="LineHeight" Value="34" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="TextBlock.timestamp">
+    <Setter Property="FontFamily" Value="Cascadia Code, Cascadia Mono, DejaVu Sans Mono, Consolas, monospace" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
+  </Style>
+  <Style Selector="TextBlock.timer">
+    <Setter Property="FontFamily" Value="Cascadia Code, Cascadia Mono, DejaVu Sans Mono, Consolas, monospace" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="LineHeight" Value="22" />
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+
+  <!-- Nombres anteriores, por compatibilidad mientras se migran las vistas. -->
+  <Style Selector="TextBlock.muted">
+    <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
+  </Style>
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="Cascadia Code, Cascadia Mono, DejaVu Sans Mono, Consolas, monospace" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+
+  <!-- Botones: base md 40 px, radio 8; clases primary/secondary/ghost/danger y sm/lg. -->
+  <Style Selector="Button">
+    <Setter Property="Height" Value="40" />
+    <Setter Property="Padding" Value="16,0" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+        <BrushTransition Property="BorderBrush" Duration="0:0:0.12" />
+        <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+  </Style>
+  <Style Selector="Button:focus-visible">
+    <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
+    <Setter Property="BorderThickness" Value="2" />
+  </Style>
+  <Style Selector="Button:disabled">
+    <Setter Property="Opacity" Value="0.4" />
+  </Style>
+
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{DynamicResource BrandBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnBrandBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BrandHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BrandHoverBrush}" />
+  </Style>
+
+  <Style Selector="Button.secondary">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+  </Style>
+  <Style Selector="Button.secondary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+  </Style>
+
+  <Style Selector="Button.ghost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
+  </Style>
+  <Style Selector="Button.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <!-- Solo para «Terminar». -->
+  <Style Selector="Button.danger">
+    <Setter Property="Background" Value="{DynamicResource LiveBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LiveBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnBrandBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource LiveBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LiveBrush}" />
+    <Setter Property="Opacity" Value="0.88" />
+  </Style>
+
+  <Style Selector="Button.sm">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="Button.lg">
+    <Setter Property="Height" Value="48" />
+    <Setter Property="Padding" Value="20,0" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <!-- Navegación lateral. -->
+  <Style Selector="Button.nav">
+    <Setter Property="Height" Value="36" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+  </Style>
+  <Style Selector="Button.nav:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.nav.active">
+    <Setter Property="Background" Value="{DynamicResource BrandSubtleBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource BrandBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.nav.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BrandSubtleBrush}" />
+  </Style>
+
+  <!-- Tarjetas y superficies. -->
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="BoxShadow" Value="0 1 3 0 #1A000000" />
+  </Style>
+  <Style Selector="Border.page">
+    <Setter Property="Padding" Value="20" />
+  </Style>
+  <Style Selector="Border.hairline">
+    <Setter Property="Background" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="Height" Value="1" />
+  </Style>
+
+  <!-- Badges: solo success, warning y live tienen color; meet es el azul del origen. -->
+  <Style Selector="Border.badge">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="6,2" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.badge > TextBlock">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
+  </Style>
+  <Style Selector="Border.badge.success">
+    <Setter Property="Background" Value="{DynamicResource SuccessSubtleBrush}" />
+  </Style>
+  <Style Selector="Border.badge.success > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" />
+  </Style>
+  <Style Selector="Border.badge.warning">
+    <Setter Property="Background" Value="{DynamicResource WarningSubtleBrush}" />
+  </Style>
+  <Style Selector="Border.badge.warning > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+  </Style>
+  <Style Selector="Border.badge.live">
+    <Setter Property="Background" Value="{DynamicResource LiveSubtleBrush}" />
+  </Style>
+  <Style Selector="Border.badge.live > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource LiveBrush}" />
+  </Style>
+  <Style Selector="Border.badge.meet">
+    <Setter Property="Background" Value="{DynamicResource MeetSubtleBrush}" />
+  </Style>
+  <Style Selector="Border.badge.meet > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource MeetBrush}" />
+  </Style>
+
+  <!-- Chip de hablante: punto de 6 px + nombre. -->
+  <Style Selector="Border.chip">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="3,8" />
+  </Style>
+  <Style Selector="Border.chip.yo">
+    <Setter Property="Background" Value="{DynamicResource SpeakerYoSubtleBrush}" />
+  </Style>
+  <Style Selector="Border.chip.yo > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource SpeakerYoBrush}" />
+  </Style>
+  <Style Selector="Border.chip.otros">
+    <Setter Property="Background" Value="{DynamicResource SpeakerOtrosSubtleBrush}" />
+  </Style>
+  <Style Selector="Border.chip.otros > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource SpeakerOtrosBrush}" />
+  </Style>
+
+  <!-- Barra de participación de 6 px. El color llega por Foreground (color del hablante). -->
+  <Style Selector="ProgressBar.share">
+    <Setter Property="Height" Value="6" />
+    <Setter Property="MinHeight" Value="6" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource BrandBrush}" />
+  </Style>
+
+  <!-- Opción del diálogo de consentimiento: botón grande con título y descripción. -->
   <Style Selector="Button.choice">
+    <Setter Property="Height" Value="NaN" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Left" />
-    <Setter Property="Padding" Value="14,10" />
+    <Setter Property="Padding" Value="14,12" />
     <Setter Property="CornerRadius" Value="8" />
+  </Style>
+  <Style Selector="Button.choice.selected">
+    <Setter Property="Background" Value="{DynamicResource BrandSubtleBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
   </Style>
 </Styles>
