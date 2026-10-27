@@ -2,7 +2,15 @@
 
 Lee los **subtítulos de Google Meet** (con el nombre de cada persona) y los guarda **solo en tu equipo**. Luego tu IA (Claude, Codex, Gemini, DeepSeek…) hace actas, resúmenes y responde preguntas sobre tus reuniones a través de MCP. Sin bots, sin servidores, sin modelos locales.
 
-## Instalar (2 pasos)
+## Instalar
+**Con instalador (lo más fácil),** desde la [última release](https://github.com/AlejandroVegaFullstackDev/meet-agent/releases/latest):
+- **Windows:** `MeetAgent-Setup-<versión>.exe`. App de escritorio + conector de la extensión + MCP, sin administrador. Windows puede avisar «editor desconocido» (el instalador no está firmado): *Más información → Ejecutar de todas formas*.
+- **Ubuntu/Debian:** `sudo apt install ./meetagent_<versión>_amd64.deb`. Si usas el Firefox de snap, ejecuta además `./install.sh` del paquete `.tar.gz`.
+- **macOS:** `MeetAgent-<versión>-macos-arm64.pkg` (Apple Silicon) o `-x64.pkg` (Intel): conector + MCP para la extensión. No está firmado por Apple: clic derecho → *Abrir*.
+
+Después: instala la extensión (punto 2 de abajo) y, en la app de escritorio, conecta tu IA en la pestaña **IA**.
+
+**Sin instalador** (2 pasos):
 1. **Conector** (sin permisos de administrador):
    - Windows: clic derecho en `install.ps1` → *Ejecutar con PowerShell*, o bien `powershell -ExecutionPolicy Bypass -File install.ps1`
    - Linux y macOS: `./install.sh`
@@ -16,7 +24,7 @@ Lee los **subtítulos de Google Meet** (con el nombre de cada persona) y los gua
 ## Usar
 - En un Meet aparece el panel **MeetAgent** abajo a la izquierda → **Transcribir**. Si los subtítulos no se activan, pulsa `c` y elige Español.
 - **Historial**: botón en el panel o el ícono de MeetAgent en la barra del navegador. Ahí ves, buscas y exportas todas tus reuniones.
-- **Avisar en el chat**: publica que estás tomando notas. Úsalo siempre que transcribas a otras personas (Ley 1581 de protección de datos).
+- **Avisar en el chat**: publica que estás tomando notas. Úsalo siempre que transcribas a otras personas (lo pide la ley de protección de datos de casi todos los países).
 - **Con tu IA**: `claude mcp add meetagent -- <ruta a meetagent-mcp>` (lo imprime el instalador). Otras IA: ver `mcp.md`.
 
 ## Desinstalar

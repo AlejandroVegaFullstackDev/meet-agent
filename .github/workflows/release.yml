@@ -1,4 +1,5 @@
-# En cada push a main: pruebas → paquetes → release v<versión del manifest>.
+# En cada push a main: pruebas → paquetes (.zip/.tar.gz, .deb) → release v<versión del manifest>,
+# y después los instaladores .exe (Windows) y .pkg (macOS) se suben a la misma release.
 #  - Versión nueva: crea la release y envía la extensión a Firefox (AMO) y Edge Add-ons si hay secretos.
 #  - Misma versión: mueve la etiqueta al último commit y reemplaza los paquetes de la release.
 # Para publicar en las tiendas, sube "version" en extension/manifest.json.
@@ -50,7 +51,10 @@ jobs:
           if gh release view "v$V" >/dev/null 2>&1; then echo "nueva=false"; else echo "nueva=true"; fi >> "$GITHUB_OUTPUT"
 
       - name: Paquetes
-        run: scripts/package-release.sh
+        run: |
+          scripts/package-release.sh
+          scripts/publish.sh linux-x64
+          scripts/package-deb.sh
 
       - name: Release
         env:
@@ -77,3 +81,46 @@ jobs:
         run: |
           scripts/publish-edge.sh "dist/release/meetagent-extension-tienda-${{ steps.v.outputs.version }}.zip" \
             "Versión ${{ steps.v.outputs.version }}. Requiere el conector local (native messaging) de https://github.com/${{ github.repository }}/releases"
+
+  # Instalador .exe (Inno Setup): app de escritorio + conector + MCP + extensión, sin administrador.
+  windows:
+    needs: release
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Instalador
+        run: |
+          V=$(python -c "import json;print(json.load(open('extension/manifest.json'))['version'])")
+          scripts/publish.sh win-x64
+          scripts/host-manifests.sh dist/win-x64 meetagent-host.exe
+          choco install innosetup -y --no-progress
+          mkdir -p dist/release
+          "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" //Q "//DAppVersion=$V" deploy/windows/meetagent.iss
+          gh release upload "v$V" "dist/release/MeetAgent-Setup-$V.exe" --clobber
+
+  # Instaladores .pkg para macOS (Apple Silicon e Intel): conector + MCP + extensión.
+  macos:
+    needs: release
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Instaladores
+        run: |
+          V=$(python3 -c "import json;print(json.load(open('extension/manifest.json'))['version'])")
+          scripts/publish.sh osx-arm64 osx-x64
+          scripts/package-macos-pkg.sh osx-arm64
+          scripts/package-macos-pkg.sh osx-x64
+          gh release upload "v$V" dist/release/*.pkg --clobber

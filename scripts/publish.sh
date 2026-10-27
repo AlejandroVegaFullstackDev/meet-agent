@@ -13,11 +13,10 @@ RIDS=("${@:-linux-x64 win-x64}")
 for rid in ${RIDS[@]}; do
   out="dist/$rid"
   rm -rf "$out"
-  # Single file para lo administrado; las nativas (Whisper, Skia, SQLite) quedan como archivos al lado
-  # porque Whisper.net las busca en runtimes/<rid>/ junto al ejecutable.
+  # Single file para lo administrado; las nativas (Skia, SQLite) quedan como archivos al lado.
   case "$rid" in osx-*) ;; *) "$DOTNET" publish app/src/MeetAgent.Desktop -c Release -r "$rid" --self-contained true \
     -p:PublishSingleFile=true -p:DebugType=none -o "$out" --nologo -v quiet ;; esac
-  # Servidor MCP (stdio) para Claude Code, opencode, Codex…: un solo archivo, sin nativas de audio ni Whisper.
+  # Servidor MCP (stdio) para Claude Code, opencode, Codex…: un solo archivo, sin nativas de audio.
   "$DOTNET" publish app/src/MeetAgent.Mcp -c Release -r "$rid" --self-contained true \
     -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o "$out" --nologo -v quiet
   # Host de native messaging para la extensión de Meet: un solo archivo, solo SQLite.
