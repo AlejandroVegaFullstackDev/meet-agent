@@ -81,6 +81,51 @@ public class CapturesTests
         Save(connectWindow, $"conectar-{suffix}-560.png");
         connectWindow.Close();
 
+        // Conectar tu IA (DeepSeek conectado: badge verde, key y «Desconectar»).
+        var connected = new ConnectViewModel(new AiSettings(new Connection(AiProvider.DeepSeek,
+            Providers.Get(AiProvider.DeepSeek).ChatModel, "sk-demo")), _ => { });
+        var connectedShell = new MainViewModel(Fakes.Session(new Fakes.Store(), new Fakes.Recorders()), "falso",
+            () => Task.FromResult(Consent.None)) { Connect = connected };
+        connectedShell.Start();
+        connectedShell.CurrentPage = ShellPage.Connect;
+        var connectedWindow = new MainWindow { DataContext = connectedShell };
+        connectedWindow.Show();
+        Save(connectedWindow, $"conectar-conectado-{suffix}-900.png");
+        Width(connectedWindow, 560);
+        Save(connectedWindow, $"conectar-conectado-{suffix}-560.png");
+        connectedWindow.Close();
+
+        // Conectar tu IA (error: qué hacer, «Reintentar» y salida por API key).
+        var error = new ConnectViewModel(new AiSettings(), _ => { },
+            connector: new AccountConnector(find: _ => null));
+        error.Claude.SetError("No pudimos abrir el navegador. Revisa tu conexión e inténtalo de nuevo.");
+        var errorShell = new MainViewModel(Fakes.Session(new Fakes.Store(), new Fakes.Recorders()), "falso",
+            () => Task.FromResult(Consent.None)) { Connect = error };
+        errorShell.Start();
+        errorShell.CurrentPage = ShellPage.Connect;
+        var errorWindow = new MainWindow { DataContext = errorShell };
+        errorWindow.Show();
+        Save(errorWindow, $"conectar-error-{suffix}-900.png");
+        Width(errorWindow, 560);
+        Save(errorWindow, $"conectar-error-{suffix}-560.png");
+        errorWindow.Close();
+
+        // Conectar tu IA (mientras espera el login: spinner y acción deshabilitada).
+        var busy = new ConnectViewModel(new AiSettings(), _ => { },
+            connector: new AccountConnector(find: _ => null));
+        busy.Claude.State = ProviderCardState.Busy;
+        busy.Claude.Status = "Esperando que inicies sesión…";
+        var busyShell = new MainViewModel(Fakes.Session(new Fakes.Store(), new Fakes.Recorders()), "falso",
+            () => Task.FromResult(Consent.None)) { Connect = busy };
+        busyShell.Start();
+        busyShell.CurrentPage = ShellPage.Connect;
+        var busyWindow = new MainWindow { DataContext = busyShell };
+        busyWindow.Show();
+        Save(busyWindow, $"conectar-conectando-{suffix}-900.png");
+        Width(busyWindow, 560);
+        Save(busyWindow, $"conectar-conectando-{suffix}-560.png");
+        busyWindow.Close();
+
         // Grabar: reposo con la última reunión y luego en vivo.
         var history = History();
         var (store, rec) = (new Fakes.Store(), new Fakes.Recorders());

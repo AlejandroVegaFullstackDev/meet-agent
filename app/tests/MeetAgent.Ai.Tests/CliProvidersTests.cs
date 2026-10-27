@@ -134,9 +134,8 @@ public class CliChatTests
 public class AccountDetectorTests
 {
     private static AccountDetector Detector(FakeRunner runner, Func<string, string?>? find = null,
-        Action<AiProvider>? launch = null, string? home = null) =>
-        new(find ?? (_ => "cli"), runner.RunAsync, launch, home,
-            pollInterval: TimeSpan.FromMilliseconds(1), loginTimeout: TimeSpan.FromSeconds(2));
+        string? home = null) =>
+        new(find ?? (_ => "cli"), runner.RunAsync, home);
 
     [Fact]
     public async Task Claude_esta_conectado_si_auth_status_dice_loggedIn()
@@ -185,27 +184,12 @@ public class AccountDetectorTests
     }
 
     [Fact]
-    public async Task Sin_instalar_no_hay_sesion_ni_se_abre_terminal()
+    public async Task Sin_instalar_el_estado_esta_vacio()
     {
         using var runner = new FakeRunner((_, _) => (0, """{"loggedIn":true}"""));
-        var launched = false;
-        var detector = Detector(runner, find: _ => null, launch: _ => launched = true);
-        var state = await detector.DetectAsync(AiProvider.ClaudeCuenta);
+        var state = await Detector(runner, find: _ => null).DetectAsync(AiProvider.ClaudeCuenta);
         Assert.False(state.Installed);
-        Assert.False(await detector.LoginAsync(AiProvider.ClaudeCuenta));
-        Assert.False(launched);
-    }
-
-    [Fact]
-    public async Task Login_abre_la_terminal_y_espera_a_que_la_sesion_aparezca()
-    {
-        var calls = 0;
-        using var runner = new FakeRunner((_, _) => (0, $$"""{"loggedIn":{{(++calls > 1 ? "true" : "false")}}}"""));
-        var launched = AiProvider.OpenAI;
-        var ok = await Detector(runner, launch: p => launched = p).LoginAsync(AiProvider.ClaudeCuenta);
-        Assert.True(ok);
-        Assert.Equal(AiProvider.ClaudeCuenta, launched);
-        Assert.Equal(2, calls);
+        Assert.False(state.LoggedIn);
     }
 
     [Fact]

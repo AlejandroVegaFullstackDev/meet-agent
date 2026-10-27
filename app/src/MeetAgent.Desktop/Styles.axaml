@@ -35,6 +35,17 @@
           <!-- Extras del plan: badge «Meet» y 6 colores para hablantes con nombre. -->
           <SolidColorBrush x:Key="MeetBrush" Color="#2563EB" />
           <SolidColorBrush x:Key="MeetSubtleBrush" Color="#EFF6FF" />
+          <!-- Colores de marca de los proveedores (sin logos oficiales). -->
+          <SolidColorBrush x:Key="ProviderClaudeBrush" Color="#D97757" />
+          <SolidColorBrush x:Key="ProviderClaudeInkBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ProviderOpenAiBrush" Color="#000000" />
+          <SolidColorBrush x:Key="ProviderOpenAiInkBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ProviderGoogleBrush" Color="#4285F4" />
+          <SolidColorBrush x:Key="ProviderGoogleInkBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ProviderDeepSeekBrush" Color="#4D6BFE" />
+          <SolidColorBrush x:Key="ProviderDeepSeekInkBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ProviderOpenRouterBrush" Color="#6467F2" />
+          <SolidColorBrush x:Key="ProviderOpenRouterInkBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="Speaker1Brush" Color="#0F766E" />
           <SolidColorBrush x:Key="Speaker2Brush" Color="#1D4ED8" />
           <SolidColorBrush x:Key="Speaker3Brush" Color="#BE185D" />
@@ -78,6 +89,16 @@
           <SolidColorBrush x:Key="BorderStrongBrush" Color="#3D4250" />
           <SolidColorBrush x:Key="MeetBrush" Color="#3B82F6" />
           <SolidColorBrush x:Key="MeetSubtleBrush" Color="#0C1A33" />
+          <SolidColorBrush x:Key="ProviderClaudeBrush" Color="#D97757" />
+          <SolidColorBrush x:Key="ProviderClaudeInkBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ProviderOpenAiBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ProviderOpenAiInkBrush" Color="#000000" />
+          <SolidColorBrush x:Key="ProviderGoogleBrush" Color="#4285F4" />
+          <SolidColorBrush x:Key="ProviderGoogleInkBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ProviderDeepSeekBrush" Color="#4D6BFE" />
+          <SolidColorBrush x:Key="ProviderDeepSeekInkBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ProviderOpenRouterBrush" Color="#6467F2" />
+          <SolidColorBrush x:Key="ProviderOpenRouterInkBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="Speaker1Brush" Color="#2DD4BF" />
           <SolidColorBrush x:Key="Speaker2Brush" Color="#60A5FA" />
           <SolidColorBrush x:Key="Speaker3Brush" Color="#F472B6" />
@@ -358,7 +379,7 @@
     <Setter Property="Fill" Value="{DynamicResource SpeakerOtrosBrush}" />
   </Style>
 
-  <!-- Única animación del diseño: el punto rojo late mientras se graba.
+  <!-- Punto rojo que late mientras se graba y giro breve mientras se conecta una cuenta.
        Se anima el tamaño (8 → 10 px, 1,25×) dentro de un contenedor fijo para no mover nada. -->
   <Style Selector="Ellipse.pulse">
     <Setter Property="Width" Value="8" />
@@ -372,6 +393,23 @@
         <KeyFrame Cue="100%">
           <Setter Property="Width" Value="10" />
           <Setter Property="Height" Value="10" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+
+  <Style Selector="Path.spinner">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="Stretch" Value="Uniform" />
+    <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+    <Style.Animations>
+      <Animation Duration="0:0:0.9" IterationCount="Infinite">
+        <KeyFrame Cue="0%">
+          <Setter Property="RotateTransform.Angle" Value="0" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="RotateTransform.Angle" Value="360" />
         </KeyFrame>
       </Animation>
     </Style.Animations>
@@ -413,6 +451,29 @@
   <Style Selector="ListBox.history ListBoxItem:selected Border.row">
     <Setter Property="Background" Value="{DynamicResource BrandSubtleBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
+  </Style>
+
+  <!-- Chips de proveedores del formulario «Tengo una API key». -->
+  <Style Selector="ListBox.chips">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="ListBox.chips ListBoxItem">
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="Margin" Value="0,0,6,6" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="ListBox.chips ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+  </Style>
+  <Style Selector="ListBox.chips ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BrandSubtleBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource BrandBrush}" />
   </Style>
 
 

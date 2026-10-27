@@ -1,0 +1,26 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="MeetAgent.Desktop.Views.AccountInstallDialog"
+        Title="Instalar y conectar"
+        Width="440"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent">
+  <Border CornerRadius="16" Background="{DynamicResource SurfaceBrush}"
+          BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+          ClipToBounds="True">
+    <StackPanel Margin="24" Spacing="16">
+      <TextBlock Text="Instalar y conectar" Classes="heading-md" />
+      <TextBlock x:Name="MessageText" Classes="body" TextWrapping="Wrap" />
+      <TextBlock Text="Se descarga desde la página oficial del proveedor. Tus reuniones no se envían."
+                 Classes="body-sm" Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button x:Name="CancelButton" Content="Cancelar" Classes="secondary" />
+        <Button x:Name="InstallButton" Content="Instalar y conectar" Classes="primary" />
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</Window>

@@ -43,7 +43,8 @@ public sealed class App : Application
                 _vm!.TranscriberName = services.Transcriber.Name;
             }
 
-            var connect = new ConnectViewModel(services.Settings, SaveSettings);
+            var connect = new ConnectViewModel(services.Settings, SaveSettings,
+                askInstall: provider => AccountInstallDialog.AskAsync(_window!, provider));
             var settings = new SettingsViewModel(services.Settings, SaveSettings);
             connect.Changed += () => settings.Reload(services.Settings);
             settings.Changed += () => connect.Reload(services.Settings);

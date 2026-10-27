@@ -120,16 +120,16 @@ public class AiTests
     public async Task Conectar_una_cuenta_guarda_la_conexion_sin_key()
     {
         AiSettings? saved = null;
-        var detector = new AccountDetector(find: _ => "cli",
+        var connector = new AccountConnector(find: _ => "cli",
             run: (_, _, _) => Task.FromResult((0, """{"loggedIn":true}""")),
-            launch: _ => { }, pollInterval: TimeSpan.FromMilliseconds(1), loginTimeout: TimeSpan.FromSeconds(1));
+            confirmInstall: _ => Task.FromResult(false));
         try
         {
             AccountDetector.InstalledOverride = _ => true;
-            var vm = new ConnectViewModel(new AiSettings(), s => saved = s, detector: detector);
+            var vm = new ConnectViewModel(new AiSettings(), s => saved = s, connector: connector);
 
             await vm.StartAsync();
-            Assert.Equal("Detectado ✓", vm.Claude.Status);
+            Assert.Equal("Sesión detectada ✓", vm.Claude.Status);
 
             await vm.Claude.ConnectCommand.ExecuteAsync(null);
 
@@ -141,18 +141,113 @@ public class AiTests
     }
 
     [AvaloniaFact]
-    public async Task Sin_cli_instalado_la_tarjeta_ofrece_instalar()
+    public async Task Sin_instalar_la_tarjeta_pide_permiso_sin_abrir_el_navegador()
     {
         var opened = "";
-        var detector = new AccountDetector(find: _ => null, launch: _ => { });
-        var vm = new ConnectViewModel(new AiSettings(), _ => { }, detector: detector, openUrl: u => opened = u);
+        var connector = new AccountConnector(find: _ => null, confirmInstall: _ => Task.FromResult(false));
+        var vm = new ConnectViewModel(new AiSettings(), _ => { }, connector: connector, openUrl: u => opened = u);
 
         await vm.StartAsync();
-        Assert.Equal("Instalar", vm.ChatGpt.ActionLabel);
+        Assert.Equal("Iniciar sesión con ChatGPT", vm.ChatGpt.ActionLabel);
 
         await vm.ChatGpt.ConnectCommand.ExecuteAsync(null);
-        Assert.Equal(AccountDetector.InstallUrl(AiProvider.ChatGptCuenta), opened);
-        Assert.Contains("Instala Codex", vm.ChatGpt.Status);
+        Assert.Equal("", opened);
+        Assert.False(vm.ChatGpt.IsConnected);
+        Assert.Null(vm.ChatGpt.Status);
+    }
+
+    [AvaloniaFact]
+    public async Task DeepSeek_pega_la_key_y_conecta()
+    {
+        AiSettings? saved = null;
+        var vm = new ConnectViewModel(new AiSettings(), s => saved = s,
+            createChat: _ => new FakeChat("listo"));
+
+        Assert.Equal("Conseguir mi key", vm.DeepSeek.ActionLabel);
+        Assert.True(vm.PasteDeepSeekKeyFromClipboard(" sk-deepseek "));
+        Assert.Equal("Key pegada ✓", vm.DeepSeek.KeyStatus);
+        Assert.Equal("Conectar", vm.DeepSeek.ActionLabel);
+
+        await vm.DeepSeek.ConnectCommand.ExecuteAsync(null);
+
+        Assert.Equal(AiProvider.DeepSeek, saved!.Chat!.Provider);
+        Assert.True(vm.DeepSeek.IsConnected);
+        Assert.Equal("DeepSeek ✓", vm.StatusText);
+    }
+
+    [AvaloniaFact]
+    public async Task Desconectar_conserva_el_transcriptor()
+    {
+        AiSettings? saved = null;
+        var settings = new AiSettings(new Connection(AiProvider.OpenAI, "gpt-5-mini", "sk-openai"),
+            new Connection(AiProvider.Groq, "whisper-large-v3-turbo", "gsk-demo"));
+        var vm = new ConnectViewModel(settings, s => saved = s, createChat: _ => new FakeChat("listo"));
+
+        await vm.ApiKey.DisconnectCommand.ExecuteAsync(null);
+
+        Assert.Null(saved!.Chat);
+        Assert.NotNull(saved.Transcription);
+        Assert.False(vm.ApiKey.IsConnected);
+        Assert.Equal("Configurar", vm.ApiKey.ActionLabel);
+    }
+
+    [AvaloniaFact]
+    public async Task Google_sin_componente_se_conecta_con_key_en_su_tarjeta()
+    {
+        AiSettings? saved = null;
+        Task<(int ExitCode, string Output)> NoNode(System.Diagnostics.ProcessStartInfo info, string stdin,
+            CancellationToken ct) => Task.FromResult((1, "no hay node"));
+        var installer = new AccountInstaller(run: NoNode, find: name => name == "node" ? "node" : null);
+        var connector = new AccountConnector(find: _ => null, run: NoNode, installer: installer,
+            confirmInstall: _ => Task.FromResult(true));
+        var vm = new ConnectViewModel(new AiSettings(), s => saved = s,
+            createChat: _ => new FakeChat("listo"), connector: connector);
+
+        await vm.Gemini.ConnectCommand.ExecuteAsync(null);
+        Assert.True(vm.Gemini.ShowsKeyField);
+        Assert.Equal("Conseguir mi key gratis", vm.Gemini.ActionLabel);
+
+        vm.Gemini.KeyValue = "AIza-demo";
+        await vm.Gemini.ConnectCommand.ExecuteAsync(null);
+
+        Assert.Equal(AiProvider.Gemini, saved!.Chat!.Provider);
+        Assert.True(vm.Gemini.IsConnected);
+    }
+
+    [AvaloniaFact]
+    public async Task Desconectar_google_con_key_limpia_la_tarjeta_de_google()
+    {
+        AiSettings? saved = null;
+        var settings = new AiSettings(new Connection(AiProvider.Gemini,
+            Providers.Get(AiProvider.Gemini).ChatModel, "AIza-demo"));
+        var vm = new ConnectViewModel(settings, s => saved = s);
+
+        Assert.True(vm.Gemini.IsConnected);
+        await vm.Gemini.DisconnectCommand.ExecuteAsync(null);
+
+        Assert.Null(saved!.Chat);
+        Assert.False(vm.Gemini.IsConnected);
+        Assert.Equal("Conectar", vm.Gemini.ActionLabel);
+    }
+
+    [AvaloniaFact]
+    public async Task Si_falla_la_cuenta_se_puede_seguir_con_una_api_key()
+    {
+        Task<(int ExitCode, string Output)> Failing(System.Diagnostics.ProcessStartInfo info, string stdin,
+            CancellationToken ct) => Task.FromResult((1, "sin conexión"));
+        var installer = new AccountInstaller(run: Failing, find: _ => null);
+        var connector = new AccountConnector(find: _ => null, run: Failing, installer: installer,
+            confirmInstall: _ => Task.FromResult(true));
+        var vm = new ConnectViewModel(new AiSettings(), _ => { }, connector: connector, openUrl: _ => { });
+
+        await vm.Claude.ConnectCommand.ExecuteAsync(null);
+
+        Assert.True(vm.Claude.HasError);
+        Assert.True(vm.Claude.ShowKeyAlternative);
+
+        vm.Claude.UseApiKeyCommand.Execute(null);
+        Assert.True(vm.ApiKey.IsExpanded);
+        Assert.Equal(AiProvider.Anthropic, vm.ApiKey.SelectedProvider.Provider);
     }
 
     [AvaloniaFact]

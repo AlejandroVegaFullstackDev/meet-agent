@@ -6,50 +6,65 @@ using MeetAgent.Core.Ports;
 namespace MeetAgent.Desktop.ViewModels;
 
 /// <summary>
-/// «Conecta tu IA»: entra con la cuenta que ya usas (Claude Code, Codex, Gemini CLI), con OpenRouter,
-/// con una API key o con tu propio modelo. Sin IDs técnicos: cada tarjeta explica lo que hace.
+/// «Conecta tu IA»: un clic abre el navegador del proveedor y vuelve conectado. También admite
+/// una API key o un modelo propio, sin hablar de componentes ni de comandos en la pantalla.
 /// </summary>
 public sealed partial class ConnectViewModel : ObservableObject
 {
     private readonly Action<AiSettings> _save;
     private readonly Func<Connection, IChatModel> _createChat;
-    private readonly AccountDetector _detector;
+    private readonly AccountConnector _connector;
     private readonly Func<CancellationToken, Task<string>> _openRouterLogin;
     private readonly Action<string> _openUrl;
     private readonly Func<CancellationToken, Task<IReadOnlyList<LocalModel>>> _detectModels;
 
     /// <param name="createChat">Arma la IA de una conexión (en pruebas, una falsa).</param>
-    /// <param name="detector">Detecta los CLI y sus sesiones (en pruebas, uno falso).</param>
+    /// <param name="connector">Conecta cuentas con un clic (en pruebas, uno falso).</param>
     /// <param name="openRouterLogin">Inicia sesión en OpenRouter y devuelve la API key.</param>
     /// <param name="detectModels">Busca modelos en Ollama y LM Studio.</param>
+    /// <param name="askInstall">Pide permiso antes de descargar el componente oficial.</param>
     public ConnectViewModel(AiSettings current, Action<AiSettings> save,
         Func<Connection, IChatModel>? createChat = null,
-        AccountDetector? detector = null,
+        AccountConnector? connector = null,
         Func<CancellationToken, Task<string>>? openRouterLogin = null,
         Action<string>? openUrl = null,
-        Func<CancellationToken, Task<IReadOnlyList<LocalModel>>>? detectModels = null)
+        Func<CancellationToken, Task<IReadOnlyList<LocalModel>>>? detectModels = null,
+        Func<AiProvider, Task<bool>>? askInstall = null)
     {
         _save = save;
         _createChat = createChat ?? AiFactory.CreateChat;
-        _detector = detector ?? AccountDetector.Default;
-        _openRouterLogin = openRouterLogin ?? (ct => OpenRouterLogin.LoginAsync(AiFactory.Http, ct: ct));
         _openUrl = openUrl ?? OpenRouterLogin.OpenBrowser;
+        _connector = connector ?? new AccountConnector(confirmInstall: askInstall ?? (_ => Task.FromResult(false)));
+        _openRouterLogin = openRouterLogin ?? (ct => OpenRouterLogin.LoginAsync(AiFactory.Http, ct: ct));
         _detectModels = detectModels ?? (ct => new LocalModels().ListAsync(ct));
 
-        Claude = new ProviderCardViewModel("Usar mi cuenta de Claude", "Por Claude Code",
-            "Iniciar sesión", ProviderCardKind.Account, ConnectCardAsync, AiProvider.ClaudeCuenta);
-        ChatGpt = new ProviderCardViewModel("Usar mi cuenta de ChatGPT", "Por Codex",
-            "Iniciar sesión", ProviderCardKind.Account, ConnectCardAsync, AiProvider.ChatGptCuenta);
-        Gemini = new ProviderCardViewModel("Usar mi cuenta de Google (Gemini)", "Por Gemini CLI, gratis",
-            "Iniciar sesión", ProviderCardKind.Account, ConnectCardAsync, AiProvider.GeminiCuenta);
+        Claude = new ProviderCardViewModel("Claude", "Usa tu cuenta de Claude", "Iniciar sesión con Claude",
+            ProviderCardKind.Account, ConnectCardAsync, AiProvider.ClaudeCuenta,
+            "ProviderClaudeBrush", "C", disconnect: DisconnectCardAsync, openUrl: _openUrl, useApiKey: UseApiKey);
+        ChatGpt = new ProviderCardViewModel("ChatGPT", "Usa tu cuenta de ChatGPT", "Iniciar sesión con ChatGPT",
+            ProviderCardKind.Account, ConnectCardAsync, AiProvider.ChatGptCuenta,
+            "ProviderOpenAiBrush", "AI", disconnect: DisconnectCardAsync, openUrl: _openUrl, useApiKey: UseApiKey);
+        Gemini = new ProviderCardViewModel("Google (Gemini)", "Usa tu cuenta de Google", "Iniciar sesión con Google",
+            ProviderCardKind.Account, ConnectCardAsync, AiProvider.GeminiCuenta,
+            "ProviderGoogleBrush", "G", keyUrl: Providers.Get(AiProvider.Gemini).KeyUrl,
+            keyAction: "Conseguir mi key gratis", disconnect: DisconnectCardAsync, openUrl: _openUrl,
+            useApiKey: UseApiKey);
         OpenRouter = new ProviderCardViewModel("OpenRouter", "Todos los modelos, pago por uso",
-            "Iniciar sesión", ProviderCardKind.OpenRouter, ConnectCardAsync);
-        ApiKey = new ProviderCardViewModel("Tengo una API key", "Anthropic, OpenAI, DeepSeek o Gemini",
-            "Configurar", ProviderCardKind.ApiKey, ConnectCardAsync);
+            "Iniciar sesión con OpenRouter", ProviderCardKind.OpenRouter, ConnectCardAsync,
+            brandBrushKey: "ProviderOpenRouterBrush", logoText: "O", disconnect: DisconnectCardAsync,
+            openUrl: _openUrl);
+        DeepSeek = new ProviderCardViewModel("DeepSeek", "Usa tu API key de DeepSeek", "Conseguir mi key",
+            ProviderCardKind.DeepSeek, ConnectCardAsync, AiProvider.DeepSeek,
+            "ProviderDeepSeekBrush", "D", keyMode: true, keyUrl: Providers.Get(AiProvider.DeepSeek).KeyUrl,
+            disconnect: DisconnectCardAsync, openUrl: _openUrl);
+        ApiKey = new ProviderCardViewModel("Tengo una API key", "Claude, OpenAI, DeepSeek, Gemini o Groq",
+            "Configurar", ProviderCardKind.ApiKey, ConnectCardAsync,
+            disconnect: DisconnectCardAsync, openUrl: _openUrl);
         OwnModel = new ProviderCardViewModel("Tengo mi propio modelo", "Ollama, LM Studio o tu servidor",
-            "Configurar", ProviderCardKind.OwnModel, ConnectCardAsync, detectModels: _detectModels);
+            "Configurar", ProviderCardKind.OwnModel, ConnectCardAsync, detectModels: _detectModels,
+            disconnect: DisconnectCardAsync, openUrl: _openUrl);
 
-        Cards = [Claude, ChatGpt, Gemini, OpenRouter, ApiKey, OwnModel];
+        Cards = [Claude, ChatGpt, Gemini, OpenRouter, DeepSeek, ApiKey, OwnModel];
         _settings = current;
         HasTranscriber = current.Transcription is { IsUsable: true };
         RefreshFromSettings();
@@ -59,6 +74,7 @@ public sealed partial class ConnectViewModel : ObservableObject
     public ProviderCardViewModel ChatGpt { get; }
     public ProviderCardViewModel Gemini { get; }
     public ProviderCardViewModel OpenRouter { get; }
+    public ProviderCardViewModel DeepSeek { get; }
     public ProviderCardViewModel ApiKey { get; }
     public ProviderCardViewModel OwnModel { get; }
     public IReadOnlyList<ProviderCardViewModel> Cards { get; }
@@ -128,16 +144,14 @@ public sealed partial class ConnectViewModel : ObservableObject
         RefreshFromSettings();
     }
 
-    /// <summary>Comprueba los CLI instalados y si ya tienen sesión. No gasta tokens.</summary>
+    /// <summary>Comprueba si las cuentas ya tienen sesión. No gasta tokens ni instala nada.</summary>
     public async Task StartAsync()
     {
         foreach (var card in new[] { Claude, ChatGpt, Gemini })
         {
-            if (card.Provider is not { } provider || card.IsConnected) continue;
-            var state = await _detector.DetectAsync(provider);
-            card.SetActionText(state.Installed ? "Iniciar sesión" : "Instalar");
-            if (state.LoggedIn) card.Status = "Detectado ✓";
-            else if (!state.Installed) card.Status = null;
+            if (card.Provider is not { } provider || card.IsConnected || card.IsBusy || card.HasError) continue;
+            var state = await _connector.DetectAsync(provider);
+            card.Status = state.LoggedIn ? "Sesión detectada ✓" : null;
         }
     }
 
@@ -150,6 +164,7 @@ public sealed partial class ConnectViewModel : ObservableObject
     {
         ProviderCardKind.Account => ConnectAccountAsync(card),
         ProviderCardKind.OpenRouter => LoginOpenRouterAsync(card),
+        ProviderCardKind.DeepSeek => ConnectDeepSeekAsync(card),
         ProviderCardKind.ApiKey => ConnectApiKeyAsync(card),
         ProviderCardKind.OwnModel => ConnectOwnModelAsync(card),
         _ => Task.CompletedTask,
@@ -158,48 +173,77 @@ public sealed partial class ConnectViewModel : ObservableObject
     private async Task ConnectAccountAsync(ProviderCardViewModel card)
     {
         if (card.Provider is not { } provider) return;
-        if (_detector.Executable(provider) is null)
+        if (card.ShowsKeyField)
         {
-            card.Status = $"Instala {CliName(provider)} y vuelve aquí.";
-            _openUrl(AccountDetector.InstallUrl(provider));
-            return;
-        }
-
-        var state = await _detector.DetectAsync(provider);
-        if (!state.LoggedIn)
-        {
-            card.State = ProviderCardState.Busy;
-            card.Status = "Esperando a que inicies sesión en la terminal…";
-            bool ok;
-            try { ok = await _detector.LoginAsync(provider, CancellationToken.None); }
-            catch (Exception) { ok = false; }
-            if (!ok)
+            var apiProvider = provider == AiProvider.GeminiCuenta ? AiProvider.Gemini : provider;
+            var keyConnection = new Connection(apiProvider, Providers.Get(apiProvider).ChatModel,
+                Blank(card.KeyValue));
+            if (!keyConnection.IsUsable)
             {
-                card.State = ProviderCardState.Error;
-                card.Status = "No se pudo conectar. Inténtalo de nuevo.";
+                card.SetError("Escribe tu API key.", alternative: false);
                 return;
             }
+            await TestAndSaveAsync(card, keyConnection);
+            return;
         }
-
-        SaveChat(new Connection(provider, Providers.Get(provider).ChatModel));
-        MarkConnected(card, $"Conectado con tu cuenta de {AccountName(provider)} ✓");
+        card.State = ProviderCardState.Busy;
+        card.Status = "Comprobando…";
+        var progress = new Progress<string>(text => card.Status = text);
+        try
+        {
+            var result = await _connector.ConnectAsync(provider, progress, CancellationToken.None);
+            switch (result.Status)
+            {
+                case AccountConnectStatus.Connected:
+                    SaveChat(new Connection(provider, Providers.Get(provider).ChatModel));
+                    break;
+                case AccountConnectStatus.Cancelled:
+                    card.SetDisconnected();
+                    card.Status = null;
+                    break;
+                case AccountConnectStatus.NeedsKey:
+                    card.EnableKeyMode("Usa tu API key de Google (gratis)");
+                    card.State = ProviderCardState.Default;
+                    card.Status = result.Message;
+                    break;
+                default:
+                    card.SetError(result.Message ?? "No pudimos conectar tu cuenta. Inténtalo de nuevo.");
+                    break;
+            }
+        }
+        catch (Exception)
+        {
+            card.SetError("No pudimos conectar tu cuenta. Revisa tu conexión e inténtalo de nuevo.");
+        }
     }
 
     private async Task LoginOpenRouterAsync(ProviderCardViewModel card)
     {
         card.State = ProviderCardState.Busy;
-        card.Status = "Se abrió el navegador: inicia sesión en OpenRouter…";
+        card.Status = "Abriendo el navegador…";
         try
         {
-            var key = await _openRouterLogin(CancellationToken.None);
+            var login = _openRouterLogin(CancellationToken.None);
+            if (!login.IsCompleted) card.Status = "Esperando que inicies sesión…";
+            var key = await login;
             SaveChat(new Connection(AiProvider.OpenRouter, Providers.Get(AiProvider.OpenRouter).ChatModel, key));
-            MarkConnected(card, "Conectado con OpenRouter ✓");
         }
         catch (Exception)
         {
-            card.State = ProviderCardState.Error;
-            card.Status = "No se pudo conectar. Inténtalo de nuevo.";
+            card.SetError("No pudimos conectar OpenRouter. Inténtalo de nuevo.", alternative: false);
         }
+    }
+
+    private async Task ConnectDeepSeekAsync(ProviderCardViewModel card)
+    {
+        var connection = new Connection(AiProvider.DeepSeek, Providers.Get(AiProvider.DeepSeek).ChatModel,
+            Blank(card.KeyValue));
+        if (!connection.IsUsable)
+        {
+            card.SetError("Escribe tu API key de DeepSeek.", alternative: false);
+            return;
+        }
+        await TestAndSaveAsync(card, connection);
     }
 
     private async Task ConnectApiKeyAsync(ProviderCardViewModel card)
@@ -208,11 +252,10 @@ public sealed partial class ConnectViewModel : ObservableObject
             Blank(card.ApiKey), Blank(card.ApiBaseUrl));
         if (!connection.IsUsable)
         {
-            card.State = ProviderCardState.Error;
-            card.Status = "Escribe tu API key.";
+            card.SetError("Escribe tu API key.", alternative: false);
             return;
         }
-        await TestAndSaveAsync(card, connection, $"Conectado con {ShortName(connection.Provider)} ✓");
+        await TestAndSaveAsync(card, connection);
     }
 
     private async Task ConnectOwnModelAsync(ProviderCardViewModel card)
@@ -221,15 +264,14 @@ public sealed partial class ConnectViewModel : ObservableObject
             Blank(card.OwnKey), Blank(card.OwnBaseUrl));
         if (!connection.IsUsable)
         {
-            card.State = ProviderCardState.Error;
-            card.Status = "Escribe la dirección y el nombre del modelo.";
+            card.SetError("Escribe la dirección y el nombre del modelo.", alternative: false);
             return;
         }
-        await TestAndSaveAsync(card, connection, "Conectado con tu modelo ✓");
+        await TestAndSaveAsync(card, connection);
     }
 
     /// <summary>Una pregunta mínima: confirma que la IA responde antes de darla por conectada.</summary>
-    private async Task TestAndSaveAsync(ProviderCardViewModel card, Connection connection, string connectedStatus)
+    private async Task TestAndSaveAsync(ProviderCardViewModel card, Connection connection)
     {
         card.State = ProviderCardState.Busy;
         card.Status = "Comprobando…";
@@ -238,70 +280,112 @@ public sealed partial class ConnectViewModel : ObservableObject
             var model = _createChat(connection);
             await model.CompleteAsync("Responde solo con la palabra: listo", "¿Estás conectado?", null, CancellationToken.None);
             SaveChat(connection);
-            MarkConnected(card, connectedStatus);
         }
         catch (Exception)
         {
-            card.State = ProviderCardState.Error;
-            card.Status = "No se pudo conectar. Inténtalo de nuevo.";
+            card.SetError("No pudimos conectar. Revisa la key e inténtalo de nuevo.", alternative: false);
         }
     }
 
-    private void SaveChat(Connection connection) => Apply(Settings with { Chat = connection });
-
-    private void MarkConnected(ProviderCardViewModel card, string status)
+    private void SaveChat(Connection connection)
     {
-        foreach (var other in Cards)
-            if (!ReferenceEquals(other, card)) other.SetDisconnected();
-        card.SetConnected(status);
+        Apply(Settings with { Chat = connection });
+        RefreshFromSettings();
+    }
+
+    /// <summary>Desconecta la IA activa; el resto de la configuración (transcriptor) se conserva.</summary>
+    private Task DisconnectCardAsync(ProviderCardViewModel card)
+    {
+        if (Settings.Chat is { } chat && Matches(card, chat.Provider))
+            Apply(Settings with { Chat = null });
+        RefreshFromSettings();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>El aviso de error ofrece seguir con una API key en la tarjeta correspondiente.</summary>
+    private void UseApiKey(ProviderCardViewModel card)
+    {
+        var provider = card.Provider switch
+        {
+            AiProvider.ClaudeCuenta => AiProvider.Anthropic,
+            AiProvider.ChatGptCuenta => AiProvider.OpenAI,
+            _ => AiProvider.Gemini,
+        };
+        ApiKey.SetDisconnected();
+        ApiKey.SelectedProvider = Providers.Get(provider);
+        ApiKey.IsExpanded = true;
+    }
+
+    /// <summary>Pega solo una key de DeepSeek copiada; se llama al volver a la ventana.</summary>
+    public bool PasteDeepSeekKeyFromClipboard(string? text)
+    {
+        var key = text?.Trim();
+        if (string.IsNullOrWhiteSpace(key) || !key.StartsWith("sk-", StringComparison.Ordinal)) return false;
+        if (!string.IsNullOrWhiteSpace(DeepSeek.KeyValue)) return false;
+        DeepSeek.KeyValue = key;
+        DeepSeek.SetKeyStatus("Key pegada ✓");
+        return true;
     }
 
     /// <summary>Pinta el estado guardado en las tarjetas (una sola IA de análisis a la vez).</summary>
     private void RefreshFromSettings()
     {
+        foreach (var card in Cards) card.SetDisconnected();
+
         var chat = Settings.Chat;
-        if (chat is not { IsUsable: true })
-        {
-            foreach (var card in Cards) card.SetDisconnected();
-            return;
-        }
+        if (chat is not { IsUsable: true }) return;
 
-        var selected = chat.Provider switch
+        switch (chat.Provider)
         {
-            AiProvider.ClaudeCuenta => Claude,
-            AiProvider.ChatGptCuenta => ChatGpt,
-            AiProvider.GeminiCuenta => Gemini,
-            AiProvider.OpenRouter => OpenRouter,
-            AiProvider.Personalizado => OwnModel,
-            _ => ApiKey,
-        };
-
-        foreach (var card in Cards)
-            if (!ReferenceEquals(card, selected)) card.SetDisconnected();
-
-        switch (selected.Kind)
-        {
-            case ProviderCardKind.Account:
-                selected.SetConnected($"Conectado con tu cuenta de {AccountName(chat.Provider)} ✓");
+            case AiProvider.ClaudeCuenta:
+                Claude.SetConnected($"Conectado con tu cuenta de {AccountName(chat.Provider)} ✓");
                 break;
-            case ProviderCardKind.OpenRouter:
-                selected.SetConnected("Conectado con OpenRouter ✓");
+            case AiProvider.ChatGptCuenta:
+                ChatGpt.SetConnected($"Conectado con tu cuenta de {AccountName(chat.Provider)} ✓");
                 break;
-            case ProviderCardKind.ApiKey:
-                selected.SelectedProvider = chat.Info;
-                selected.Model = chat.Model;
-                selected.ApiKey = chat.ApiKey ?? "";
-                selected.ApiBaseUrl = chat.BaseUrl ?? "";
-                selected.SetConnected($"Conectado con {ShortName(chat.Provider)} ✓");
+            case AiProvider.GeminiCuenta:
+                Gemini.EnableAccountMode("Usa tu cuenta de Google");
+                Gemini.SetConnected($"Conectado con tu cuenta de {AccountName(chat.Provider)} ✓");
                 break;
-            case ProviderCardKind.OwnModel:
-                selected.OwnModel = chat.Model;
-                selected.OwnBaseUrl = chat.BaseUrl ?? selected.OwnBaseUrl;
-                selected.OwnKey = chat.ApiKey ?? "";
-                selected.SetConnected("Conectado con tu modelo ✓");
+            case AiProvider.Gemini:
+                Gemini.EnableKeyMode("Usa tu API key de Google (gratis)");
+                Gemini.KeyValue = chat.ApiKey ?? "";
+                Gemini.SetConnected("Conectado con Google ✓");
+                break;
+            case AiProvider.OpenRouter:
+                OpenRouter.SetConnected("Conectado con OpenRouter ✓");
+                break;
+            case AiProvider.DeepSeek:
+                DeepSeek.KeyValue = chat.ApiKey ?? "";
+                DeepSeek.SetConnected("Conectado con DeepSeek ✓");
+                break;
+            case AiProvider.Personalizado:
+                OwnModel.OwnModel = chat.Model;
+                OwnModel.OwnBaseUrl = chat.BaseUrl ?? OwnModel.OwnBaseUrl;
+                OwnModel.OwnKey = chat.ApiKey ?? "";
+                OwnModel.SetConnected("Conectado con tu modelo ✓");
+                break;
+            default:
+                ApiKey.SelectedProvider = chat.Info;
+                ApiKey.Model = chat.Model;
+                ApiKey.ApiKey = chat.ApiKey ?? "";
+                ApiKey.ApiBaseUrl = chat.BaseUrl ?? "";
+                ApiKey.IsExpanded = false;
+                ApiKey.SetConnected($"Conectado con {ShortName(chat.Provider)} ✓");
                 break;
         }
     }
+
+    private static bool Matches(ProviderCardViewModel card, AiProvider provider) => card.Kind switch
+    {
+        ProviderCardKind.Account => card.Provider == provider
+            || (card.Provider == AiProvider.GeminiCuenta && provider == AiProvider.Gemini),
+        ProviderCardKind.OpenRouter => provider == AiProvider.OpenRouter,
+        ProviderCardKind.DeepSeek => provider == AiProvider.DeepSeek,
+        ProviderCardKind.ApiKey => provider is AiProvider.Anthropic or AiProvider.OpenAI or AiProvider.Groq,
+        ProviderCardKind.OwnModel => provider == AiProvider.Personalizado,
+        _ => false,
+    };
 
     /// <summary>Nombre corto del proveedor para la barra lateral y los ajustes.</summary>
     internal static string ShortName(AiProvider provider) => provider switch
@@ -309,7 +393,7 @@ public sealed partial class ConnectViewModel : ObservableObject
         AiProvider.Anthropic or AiProvider.ClaudeCuenta => "Claude",
         AiProvider.OpenAI => "OpenAI",
         AiProvider.ChatGptCuenta => "ChatGPT",
-        AiProvider.Gemini or AiProvider.GeminiCuenta => "Gemini",
+        AiProvider.Gemini or AiProvider.GeminiCuenta => "Google",
         AiProvider.DeepSeek => "DeepSeek",
         AiProvider.OpenRouter => "OpenRouter",
         AiProvider.Groq => "Groq",
@@ -321,13 +405,6 @@ public sealed partial class ConnectViewModel : ObservableObject
         AiProvider.ClaudeCuenta => "Claude",
         AiProvider.ChatGptCuenta => "ChatGPT",
         _ => "Google",
-    };
-
-    private static string CliName(AiProvider provider) => provider switch
-    {
-        AiProvider.ClaudeCuenta => "Claude Code",
-        AiProvider.ChatGptCuenta => "Codex",
-        _ => "Gemini CLI",
     };
 
     private static string? Blank(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();

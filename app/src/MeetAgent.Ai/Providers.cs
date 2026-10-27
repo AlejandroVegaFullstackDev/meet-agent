@@ -15,8 +15,20 @@ public sealed record ProviderInfo(AiProvider Provider, string Label, string? Bas
 {
     public bool CanTranscribe => TranscriptionModel is not null;
 
-    /// <summary>Se conecta con la cuenta del usuario a través del CLI oficial.</summary>
+    /// <summary>Se conecta con la cuenta del usuario a través del componente oficial.</summary>
     public bool IsAccount => Provider is AiProvider.ClaudeCuenta or AiProvider.ChatGptCuenta or AiProvider.GeminiCuenta;
+
+    /// <summary>Nombre breve para los chips y las tarjetas.</summary>
+    public string ShortLabel => Provider switch
+    {
+        AiProvider.Anthropic or AiProvider.ClaudeCuenta => "Claude",
+        AiProvider.OpenAI => "OpenAI",
+        AiProvider.DeepSeek => "DeepSeek",
+        AiProvider.Gemini or AiProvider.GeminiCuenta => "Gemini",
+        AiProvider.OpenRouter => "OpenRouter",
+        AiProvider.Groq => "Groq",
+        _ => "Mi servidor",
+    };
 
     public override string ToString() => Label;
 }
