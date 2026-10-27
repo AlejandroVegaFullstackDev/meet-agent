@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/MeetAgent.Ai/MeetAgent.Ai.csproj" />
     <Project Path="src/MeetAgent.Audio.Linux/MeetAgent.Audio.Linux.csproj" />
     <Project Path="src/MeetAgent.Audio.Windows/MeetAgent.Audio.Windows.csproj" />
     <Project Path="src/MeetAgent.Cli/MeetAgent.Cli.csproj" />
@@ -14,6 +15,7 @@
     <Project Path="src/MeetAgent.SttServer/MeetAgent.SttServer.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/MeetAgent.Ai.Tests/MeetAgent.Ai.Tests.csproj" />
     <Project Path="tests/MeetAgent.Control.Tests/MeetAgent.Control.Tests.csproj" />
     <Project Path="tests/MeetAgent.Core.Tests/MeetAgent.Core.Tests.csproj" />
     <Project Path="tests/MeetAgent.Desktop.Tests/MeetAgent.Desktop.Tests.csproj" />

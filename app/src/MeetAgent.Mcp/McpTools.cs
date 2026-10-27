@@ -21,6 +21,29 @@ public sealed class McpTools(MeetingTools tools)
     public string LeerTranscripcion([Description("Id de la reunión; omítelo para la última.")] long? id_reunion = null) =>
         tools.ReadTranscript(id_reunion);
 
+    [McpServerTool(Name = "estadisticas_reunion", ReadOnly = true), Description(
+        "Estadísticas exactas de una reunión, calculadas sin IA: duración, tiempo hablado, palabras, intervenciones y " +
+        "porcentaje de participación de cada persona. Sin id, la última reunión.")]
+    public string EstadisticasReunion([Description("Id de la reunión; omítelo para la última.")] long? id_reunion = null) =>
+        tools.Stats(id_reunion);
+
+    [McpServerTool(Name = "leer_analisis", ReadOnly = true), Description(
+        "Análisis guardado de una reunión (resumen, decisiones, tareas, temas, preguntas abiertas, riesgos), hecho por la app " +
+        "con la IA del usuario o con guardar_analisis. Sin id, la última reunión.")]
+    public string LeerAnalisis([Description("Id de la reunión; omítelo para la última.")] long? id_reunion = null) =>
+        tools.ReadInsights(id_reunion);
+
+    [McpServerTool(Name = "guardar_analisis", Destructive = false, OpenWorld = false), Description(
+        "Guarda en MeetAgent TU análisis de una reunión, para que el usuario lo vea en la app y lo exporte. Primero lee la " +
+        "transcripción (leer_transcripcion) y las estadísticas; usa solo lo que está en el texto, sin inventar responsables ni fechas. " +
+        "El JSON debe tener: resumen (texto), decisiones (lista), tareas (lista de {tarea, responsable|null, fecha|null}), temas, " +
+        "preguntas_abiertas, riesgos (listas) y tono (texto o null). Reemplaza el análisis anterior de esa reunión.")]
+    public string GuardarAnalisis(
+        [Description("Id de la reunión.")] long id_reunion,
+        [Description("El análisis en JSON con los campos descritos.")] string analisis_json,
+        [Description("Quién lo hizo, p. ej. 'Claude' o 'Codex'.")] string? autor = null) =>
+        tools.SaveInsights(id_reunion, analisis_json, autor);
+
     [McpServerTool(Name = "buscar", ReadOnly = true), Description(
         "Búsqueda de texto completo en todas las reuniones (ignora tildes y mayúsculas). Admite prefijo* y \"frase exacta\".")]
     public string Buscar([Description("Texto a buscar.")] string consulta, [Description("Máximo de resultados.")] int limite = 20) =>

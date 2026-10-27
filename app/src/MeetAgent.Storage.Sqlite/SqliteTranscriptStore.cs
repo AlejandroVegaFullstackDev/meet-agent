@@ -8,7 +8,7 @@ namespace MeetAgent.Storage.Sqlite;
 /// <summary>
 /// Reuniones y segmentos en SQLite con índice FTS5 (unicode61, sin tildes) sincronizado por triggers.
 /// </summary>
-public sealed class SqliteTranscriptStore : ITranscriptStore
+public sealed class SqliteTranscriptStore : ITranscriptStore, IInsightsStore
 {
     private readonly SqliteConnection _db;
 
@@ -43,6 +43,12 @@ public sealed class SqliteTranscriptStore : ITranscriptStore
             CREATE TRIGGER IF NOT EXISTS segments_ad AFTER DELETE ON segments BEGIN
                 INSERT INTO segments_fts(segments_fts, rowid, text) VALUES ('delete', old.id, old.text);
             END;
+            CREATE TABLE IF NOT EXISTS insights (
+                meeting_id INTEGER PRIMARY KEY REFERENCES meetings(id) ON DELETE CASCADE,
+                json       TEXT NOT NULL,
+                model      TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
             CREATE TRIGGER IF NOT EXISTS segments_au AFTER UPDATE ON segments BEGIN
                 INSERT INTO segments_fts(segments_fts, rowid, text) VALUES ('delete', old.id, old.text);
                 INSERT INTO segments_fts(rowid, text) VALUES (new.id, new.text);
@@ -77,6 +83,24 @@ public sealed class SqliteTranscriptStore : ITranscriptStore
             ("$m", meetingId), ("$sp", s.Speaker.ToString()), ("$st", (long)s.Start.TotalMilliseconds),
             ("$en", (long)s.End.TotalMilliseconds), ("$tx", s.Text), ("$name", (object?)s.SpeakerName ?? DBNull.Value));
         cmd.ExecuteNonQuery();
+    }
+
+    public void SaveInsights(long meetingId, string json, string model, DateTimeOffset createdAt)
+    {
+        using var cmd = Cmd("""
+            INSERT INTO insights(meeting_id, json, model, created_at) VALUES ($m, $j, $mo, $c)
+            ON CONFLICT(meeting_id) DO UPDATE SET json = excluded.json, model = excluded.model, created_at = excluded.created_at
+            """, ("$m", meetingId), ("$j", json), ("$mo", model), ("$c", createdAt.ToString("o")));
+        cmd.ExecuteNonQuery();
+    }
+
+    public StoredInsights? GetInsights(long meetingId)
+    {
+        using var cmd = Cmd("SELECT json, model, created_at FROM insights WHERE meeting_id = $m", ("$m", meetingId));
+        using var r = cmd.ExecuteReader();
+        return r.Read()
+            ? new StoredInsights(meetingId, r.GetString(0), r.GetString(1), DateTimeOffset.Parse(r.GetString(2), CultureInfo.InvariantCulture))
+            : null;
     }
 
     public Meeting? GetMeeting(long meetingId)

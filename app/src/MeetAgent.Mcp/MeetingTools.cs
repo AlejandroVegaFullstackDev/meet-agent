@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using MeetAgent.Control;
 using MeetAgent.Core;
+using MeetAgent.Core.Analysis;
 using MeetAgent.Core.Export;
 using MeetAgent.Core.Ports;
 using MeetAgent.Core.Text;
@@ -52,6 +53,47 @@ public sealed class MeetingTools(Func<ITranscriptStore> openStore, IAppControl a
         var m = meetingId is { } id ? store.GetMeeting(id) : store.ListMeetings().FirstOrDefault();
         if (m is null) return meetingId is null ? "No hay reuniones guardadas." : $"No existe la reunión #{meetingId}.";
         return MarkdownExporter.Export(m, store.GetSegments(m.Id));
+    }
+
+    /// <summary>Estadísticas calculadas (sin IA): duración, tiempo y palabras por persona, intervenciones.</summary>
+    public string Stats(long? meetingId)
+    {
+        using var store = openStore();
+        var m = meetingId is { } id ? store.GetMeeting(id) : store.ListMeetings().FirstOrDefault();
+        if (m is null) return meetingId is null ? "No hay reuniones guardadas." : $"No existe la reunión #{meetingId}.";
+        var segs = store.GetSegments(m.Id);
+        if (segs.Count == 0) return $"La reunión #{m.Id} no tiene texto.";
+        return $"# Estadísticas de #{m.Id} · {m.Title}\n\n{MeetingStats.From(segs).ToMarkdown()}";
+    }
+
+    /// <summary>El análisis guardado (hecho por la app con la IA del usuario o por una IA vía <see cref="SaveInsights"/>).</summary>
+    public string ReadInsights(long? meetingId)
+    {
+        using var store = openStore();
+        var m = meetingId is { } id ? store.GetMeeting(id) : store.ListMeetings().FirstOrDefault();
+        if (m is null) return meetingId is null ? "No hay reuniones guardadas." : $"No existe la reunión #{meetingId}.";
+        if ((store as IInsightsStore)?.GetInsights(m.Id) is not { } saved)
+            return $"La reunión #{m.Id} todavía no tiene análisis. Puedes hacerlo tú: lee la transcripción con leer_transcripcion " +
+                   $"y guárdalo con guardar_analisis(id_reunion={m.Id}, ...).";
+        return $"# Análisis de #{m.Id} · {m.Title}\n_Hecho con {saved.Model} el {saved.CreatedAt:yyyy-MM-dd HH:mm}_\n\n" +
+               MeetingInsights.Parse(saved.Json).ToMarkdown();
+    }
+
+    /// <summary>Guarda en MeetAgent el análisis que hizo la IA conectada por MCP, para verlo en la app y exportarlo.</summary>
+    public string SaveInsights(long meetingId, string json, string? author)
+    {
+        using var store = openStore();
+        if (store.GetMeeting(meetingId) is null) return $"No existe la reunión #{meetingId}.";
+        if (store is not IInsightsStore insights) return "Este almacén no guarda análisis.";
+        MeetingInsights parsed;
+        try { parsed = MeetingInsights.Parse(json); }
+        catch (Exception ex) when (ex is FormatException or System.Text.Json.JsonException)
+        {
+            return $"El JSON no es válido ({ex.Message}). Debe cumplir este esquema:\n{MeetingAnalyzer.Schema}";
+        }
+        if (parsed.Resumen.Length == 0) return "Falta el resumen.";
+        insights.SaveInsights(meetingId, parsed.ToJson(), string.IsNullOrWhiteSpace(author) ? "IA por MCP" : $"{author.Trim()} (MCP)", DateTimeOffset.Now);
+        return $"Análisis guardado en la reunión #{meetingId}: {parsed.Decisiones.Count} decisiones, {parsed.Tareas.Count} tareas. Ya se ve en la app (Historial).";
     }
 
     public string Search(string query, int limit)

@@ -9,7 +9,7 @@
     <StackPanel Spacing="4">
       <TextBlock Text="¿Qué hago con esta reunión?" FontSize="18" FontWeight="SemiBold" />
       <TextBlock Classes="muted" TextWrapping="Wrap"
-                 Text="Avisa a las demás personas antes de transcribir o grabar. Todo se queda en este equipo." />
+                 Text="Avisa a las demás personas antes de transcribir o grabar. El audio se envía al servicio de transcripción que elegiste en la pestaña IA; el texto y la grabación quedan en este equipo." />
     </StackPanel>
 
     <StackPanel Spacing="8">

@@ -3,8 +3,8 @@ using MeetAgent.Core.Ports;
 namespace MeetAgent.Desktop.Services;
 
 /// <summary>
-/// Transcriptor falso para desarrollar la UI sin cargar Whisper: devuelve frases de ejemplo
-/// en orden, con una demora parecida a la de small en este equipo.
+/// Transcriptor falso (--fake) para desarrollar la UI sin gastar en una API: devuelve frases de ejemplo
+/// en orden, con una demora parecida a la de un servicio real.
 /// </summary>
 public sealed class FakeTranscriber(TimeSpan? delay = null, string? reason = null) : ITranscriber
 {

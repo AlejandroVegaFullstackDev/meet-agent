@@ -35,12 +35,24 @@ public sealed class App : Application
             _services = AppServices.Create(Program.Args);
             Console.Error.WriteLine($"MeetAgent · transcriptor: {_services.Transcriber.Name} · datos: {AppServices.DataDir}");
             _window = new MainWindow();
-            _vm = new MainViewModel(_services.Session, _services.Transcriber.Name,
+            var services = _services;
+            _vm = new MainViewModel(services.Session, services.Transcriber.Name,
                 askConsent: () => ConsentDialog.AskAsync(ShowWindow()),
                 ui: a => Dispatcher.UIThread.Post(a),
-                botFactory: _services.BotFactory)
+                botFactory: services.BotFactory)
             {
-                History = new HistoryViewModel(_services.Store, AppServices.DataDir),
+                History = new HistoryViewModel(services.Store, AppServices.DataDir, services.Insights, services.CreateChat),
+                Ai = new AiViewModel(services.Settings, s =>
+                {
+                    services.SaveSettings(s);
+                    _vm!.TranscriberName = services.Transcriber.Name;
+                }),
+                CannotStartReason = () => services.Transcriber.Problem,
+            };
+            // Con «analizar al terminar», cada reunión de la app se analiza sola con la IA del usuario.
+            _vm.MeetingEnded += id =>
+            {
+                if (services.Settings is { AnalyzeWhenMeetingEnds: true, Chat.IsUsable: true }) _ = _vm.History!.AnalyzeMeetingAsync(id);
             };
             _window.DataContext = _vm;
             _vm.PropertyChanged += OnVmChanged;

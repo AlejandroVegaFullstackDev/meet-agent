@@ -10,6 +10,9 @@ También se puede correr desde el código: `dotnet run --project app/src/MeetAge
 | `estado` | Si la app está abierta, si hay una reunión en curso y cuál fue la última | no |
 | `listar_reuniones(limite)` | Reuniones guardadas | no |
 | `leer_transcripcion(id_reunion?)` | Transcripción en Markdown (sin id, la última) | no |
+| `estadisticas_reunion(id_reunion?)` | Duración, tiempo y palabras por persona, intervenciones y % de participación. Calculadas sin IA, exactas | no |
+| `leer_analisis(id_reunion?)` | El análisis guardado: resumen, decisiones, tareas, temas, preguntas abiertas, riesgos | no |
+| `guardar_analisis(id_reunion, analisis_json, autor?)` | **Tu IA guarda su análisis en MeetAgent** (se ve en la app y se exporta). Sirve sin API key: la IA de tu suscripción (Claude Desktop/Code, Codex…) hace el trabajo | no |
 | `buscar(consulta, limite)` | Texto completo sin tildes; admite `prefijo*` y `"frase"` | no |
 | `transcripcion_en_vivo(desde_id, id_reunion?)` | Texto nuevo desde un cursor, para tomar notas mientras la reunión sigue | no (lee la base) |
 | `empezar_reunion(titulo?)` | Pide a la app que empiece. **La app muestra su diálogo de consentimiento y elige el usuario** | sí |

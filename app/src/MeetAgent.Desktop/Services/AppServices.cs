@@ -1,3 +1,4 @@
+using MeetAgent.Ai;
 using MeetAgent.Audio.Linux;
 using MeetAgent.Audio.Windows;
 using MeetAgent.Core;
@@ -6,24 +7,36 @@ using MeetAgent.Core.Pipeline;
 using MeetAgent.Core.Ports;
 using MeetAgent.Meet.Vexa;
 using MeetAgent.Storage.Sqlite;
-using MeetAgent.Stt.Whisper;
 
 namespace MeetAgent.Desktop.Services;
 
-/// <summary>Composición de la app: elige adaptadores por SO y transcriptor (Whisper o falso).</summary>
+/// <summary>
+/// Composición de la app: captura por SO, SQLite y la IA que configure el usuario (pestaña IA).
+/// No hay modelos locales: transcribe y analiza el proveedor elegido (o el servidor propio del usuario).
+/// </summary>
 public sealed class AppServices : IAsyncDisposable
 {
-    private AppServices(ITranscriber transcriber, ITranscriptStore store, MeetingSession session, Func<BotMeetingSession>? botFactory)
+    private readonly AiSettingsStore _settingsStore;
+    private readonly bool _fake;
+
+    private AppServices(SwitchableTranscriber transcriber, SqliteTranscriptStore store, MeetingSession session,
+        Func<BotMeetingSession>? botFactory, AiSettingsStore settingsStore, bool fake)
     {
         BotFactory = botFactory;
         Transcriber = transcriber;
         Store = store;
+        Insights = store;
         Session = session;
+        _settingsStore = settingsStore;
+        _fake = fake;
+        ApplySettings(settingsStore.Load());
     }
 
-    public ITranscriber Transcriber { get; }
+    public SwitchableTranscriber Transcriber { get; }
     public ITranscriptStore Store { get; }
+    public IInsightsStore Insights { get; }
     public MeetingSession Session { get; }
+    public AiSettings Settings { get; private set; } = new();
 
     /// <summary>Sesión del bot de Meet si Vexa está levantado (deploy/vexa/up.sh); null si no.</summary>
     public Func<BotMeetingSession>? BotFactory { get; }
@@ -31,42 +44,41 @@ public sealed class AppServices : IAsyncDisposable
     public static string Root => AppPaths.Root;
     public static string DataDir => AppPaths.Data;
 
-    /// <summary>
-    /// <c>--fake</c> fuerza el transcriptor falso; <c>--model medium-q5_0</c> cambia de modelo.
-    /// Si el modelo no existe, cae al falso y lo avisa en el nombre.
-    /// </summary>
+    /// <summary><c>--fake</c>: transcriptor de ejemplo, para desarrollar la UI sin gastar en una API.</summary>
     public static AppServices Create(string[] args)
     {
         IAudioSourceFactory sources = OperatingSystem.IsWindows() ? new WindowsAudioSourceFactory()
             : OperatingSystem.IsLinux() ? new LinuxAudioSourceFactory()
             : throw new PlatformNotSupportedException("Solo Windows y Linux.");
 
-        var modelName = ArgValue(args, "--model") ?? "small-q5_1";
-        var modelPath = AppPaths.Model(modelName);
-        ITranscriber transcriber;
-        if (args.Contains("--fake")) transcriber = new FakeTranscriber();
-        else if (!File.Exists(modelPath)) transcriber = new FakeTranscriber(reason: $"no está {modelPath}");
-        else
-        {
-            // Whisper se carga recién al empezar una reunión local (no al abrir la app).
-            transcriber = new LazyTranscriber(modelName,
-                () => new WhisperTranscriber(modelPath, WhisperTranscriber.DefaultThreads, audioContextSeconds: 6));
-        }
-
+        var transcriber = new SwitchableTranscriber();
         var store = new SqliteTranscriptStore($"Data Source={AppPaths.Database}");
         var recordings = new WavRecordingSinkFactory(Path.Combine(DataDir, "recordings"));
         var session = new MeetingSession(sources, transcriber, new EnergyVad(), store, recordings);
         var vexa = VexaConfig.Load(AppPaths.Root);
         Func<BotMeetingSession>? bot = vexa is null ? null : () => new BotMeetingSession(vexa.CreateClient(), store);
-        return new AppServices(transcriber, store, session, bot);
+        return new AppServices(transcriber, store, session, bot, new AiSettingsStore(Path.Combine(DataDir, "ia.json")), args.Contains("--fake"));
     }
 
-    private static string? ArgValue(string[] args, string key)
+    /// <summary>Guarda la configuración de la pestaña IA y cambia el transcriptor (solo si no hay reunión en curso).</summary>
+    public void SaveSettings(AiSettings settings)
     {
-        var i = Array.IndexOf(args, key);
-        return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
+        _settingsStore.Save(settings);
+        ApplySettings(settings);
     }
 
+    private void ApplySettings(AiSettings s)
+    {
+        Settings = s;
+        if (Session.IsRunning) return;
+        if (_fake) { Transcriber.Set(new FakeTranscriber()); return; }
+        if (s.Transcription is null) { Transcriber.Set(null, "elige quién transcribe en la pestaña IA (OpenAI, Groq o tu servidor)"); return; }
+        try { Transcriber.Set(AiFactory.CreateTranscriber(s.Transcription)); }
+        catch (AiException ex) { Transcriber.Set(null, ex.Message.TrimEnd('.')); }
+    }
+
+    /// <summary>La IA de análisis configurada, o null si falta configurarla.</summary>
+    public IChatModel? CreateChat() => Settings.Chat is { IsUsable: true } c ? AiFactory.CreateChat(c) : null;
 
     public async ValueTask DisposeAsync()
     {

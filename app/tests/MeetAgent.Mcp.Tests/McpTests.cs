@@ -62,6 +62,31 @@ public class MeetingToolsTests
     }
 
     [Fact]
+    public void Estadisticas_y_analisis_guardado_por_la_ia_del_cliente()
+    {
+        using var home = new TempHome();
+        long id;
+        using (var s = home.Open())
+        {
+            id = s.StartMeeting("Planeación", T0, "subtitulos");
+            s.AddSegment(id, new TranscriptSegment(Speaker.Otros, TimeSpan.Zero, TimeSpan.FromSeconds(6), "Lanzamos el lunes", "Ana"));
+            s.AddSegment(id, new TranscriptSegment(Speaker.Otros, TimeSpan.FromSeconds(6), TimeSpan.FromSeconds(8), "Vale", "Luis"));
+        }
+        var tools = new MeetingTools(home.Open, new FakeApp(_ => null));
+
+        Assert.Contains("| Ana | 00:00:06 | 75 |", tools.Stats(id));
+        Assert.Contains("todavía no tiene análisis", tools.ReadInsights(id));
+        Assert.Contains("no es válido", tools.SaveInsights(id, "texto suelto", "Claude"));
+
+        var ok = tools.SaveInsights(id, """{"resumen":"Se decidió lanzar.","decisiones":["Lanzar el lunes"],"tareas":[{"tarea":"Avisar a soporte","responsable":"Luis","fecha":null}]}""", "Claude");
+        Assert.Contains("1 decisiones, 1 tareas", ok);
+        var read = tools.ReadInsights(null);
+        Assert.Contains("Hecho con Claude (MCP)", read);
+        Assert.Contains("- [ ] Avisar a soporte — Luis", read);
+        Assert.Contains("No existe la reunión #999", tools.SaveInsights(999, "{}", null));
+    }
+
+    [Fact]
     public async Task Sin_app_abierta_lee_la_ultima_reunion_abierta_de_la_base()
     {
         using var home = new TempHome();
@@ -125,7 +150,7 @@ public class StdioIntegrationTests
         Path.Combine(AppContext.BaseDirectory, "meetagent-mcp.dll");
 
     [Fact]
-    public async Task Expone_las_nueve_herramientas_y_el_inicio_pasa_por_la_app()
+    public async Task Expone_las_doce_herramientas_y_el_inicio_pasa_por_la_app()
     {
         using var home = new TempHome();
         using (var s = home.Open()) s.StartMeeting("previa", DateTimeOffset.Now.AddHours(-1), "transcribir");
@@ -148,7 +173,7 @@ public class StdioIntegrationTests
 
         var tools = await client.ListToolsAsync();
         Assert.Equal(
-            ["buscar", "decir", "empezar_reunion", "esperar_novedades", "estado", "leer_transcripcion", "listar_reuniones", "terminar_reunion", "transcripcion_en_vivo"],
+            ["buscar", "decir", "empezar_reunion", "esperar_novedades", "estadisticas_reunion", "estado", "guardar_analisis", "leer_analisis", "leer_transcripcion", "listar_reuniones", "terminar_reunion", "transcripcion_en_vivo"],
             tools.Select(t => t.Name).Order());
         // Ninguna herramienta acepta un parámetro para grabar o fijar el consentimiento.
         Assert.All(tools, t => Assert.DoesNotMatch("(?i)grabar|record|consent", t.JsonSchema.GetRawText()));

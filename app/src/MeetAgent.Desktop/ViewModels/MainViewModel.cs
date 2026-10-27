@@ -41,7 +41,7 @@ public sealed partial class MainViewModel : ObservableObject
         _askConsent = askConsent;
         _ui = ui ?? (a => a());
         _now = now ?? (() => DateTimeOffset.Now);
-        TranscriberName = transcriberName;
+        _transcriberName = transcriberName;
         _session.SegmentReceived += OnSegment;
         _session.Log += msg => _ui(() => LastLog = msg);
     }
@@ -56,7 +56,18 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>Historial de todas las reuniones (pestaña «Historial»).</summary>
     public HistoryViewModel? History { get; init; }
-    public string TranscriberName { get; }
+
+    /// <summary>Configuración de la IA (pestaña «IA»).</summary>
+    public AiViewModel? Ai { get; init; }
+
+    /// <summary>Quién transcribe (cambia al guardar la pestaña IA).</summary>
+    [ObservableProperty] private string _transcriberName;
+
+    /// <summary>Si devuelve texto, no se puede empezar y se muestra ese motivo (p. ej. falta configurar la IA).</summary>
+    public Func<string?>? CannotStartReason { get; init; }
+
+    /// <summary>Una reunión de la app terminó y quedó guardada (id en la base).</summary>
+    public event Action<long>? MeetingEnded;
     public int SegmentCount => Lines.Count;
 
     [ObservableProperty]
@@ -188,6 +199,11 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async Task<Consent> StartAsync(string? requestedTitle)
     {
+        if (CannotStartReason?.Invoke() is { } why)
+        {
+            LastLog = $"No se puede empezar: {why}.";
+            return Consent.None;
+        }
         var consent = await _askConsent();
         if (consent == Consent.None)
         {
@@ -242,5 +258,6 @@ public sealed partial class MainViewModel : ObservableObject
             ? st.Latencies.Order().ElementAt(st.Latencies.Count / 2).TotalSeconds
             : 0;
         LastLog = $"Reunión #{_session.MeetingId} guardada · {SegmentCount} segmentos · latencia p50 {p50:F1} s";
+        if (_session.MeetingId is { } id) MeetingEnded?.Invoke(id);
     }
 }
