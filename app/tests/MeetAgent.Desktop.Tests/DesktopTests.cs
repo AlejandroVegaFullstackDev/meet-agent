@@ -199,6 +199,20 @@ public class ScreenshotTests
     }
 
     [AvaloniaFact]
+    public void Pestana_ia()
+    {
+        var vm = new MainViewModel(Fakes.Session(new Fakes.Store(), new Fakes.Recorders()), "sin configurar", () => Task.FromResult(Consent.None))
+        {
+            Ai = new AiViewModel(new MeetAgent.Ai.AiSettings(), _ => { }),
+        };
+        var w = new MainWindow { DataContext = vm };
+        w.Show();
+        w.FindControl<TabControl>("Tabs")!.SelectedIndex = 2;
+        Dispatcher.UIThread.RunJobs();
+        w.CaptureRenderedFrame()!.Save(Path.Combine(ScreensDir(), "ia.png"));
+    }
+
+    [AvaloniaFact]
     public void Dialogo_de_consentimiento()
     {
         var owner = new Window();
