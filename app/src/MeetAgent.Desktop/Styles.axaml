@@ -303,7 +303,7 @@
     <Setter Property="Padding" Value="6,2" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
-  <Style Selector="Border.badge > TextBlock">
+  <Style Selector="Border.badge TextBlock">
     <Setter Property="FontSize" Value="11" />
     <Setter Property="LineHeight" Value="16" />
     <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
@@ -311,25 +311,25 @@
   <Style Selector="Border.badge.success">
     <Setter Property="Background" Value="{DynamicResource SuccessSubtleBrush}" />
   </Style>
-  <Style Selector="Border.badge.success > TextBlock">
+  <Style Selector="Border.badge.success TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" />
   </Style>
   <Style Selector="Border.badge.warning">
     <Setter Property="Background" Value="{DynamicResource WarningSubtleBrush}" />
   </Style>
-  <Style Selector="Border.badge.warning > TextBlock">
+  <Style Selector="Border.badge.warning TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
   </Style>
   <Style Selector="Border.badge.live">
     <Setter Property="Background" Value="{DynamicResource LiveSubtleBrush}" />
   </Style>
-  <Style Selector="Border.badge.live > TextBlock">
+  <Style Selector="Border.badge.live TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource LiveBrush}" />
   </Style>
   <Style Selector="Border.badge.meet">
     <Setter Property="Background" Value="{DynamicResource MeetSubtleBrush}" />
   </Style>
-  <Style Selector="Border.badge.meet > TextBlock">
+  <Style Selector="Border.badge.meet TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource MeetBrush}" />
   </Style>
 
@@ -337,19 +337,44 @@
   <Style Selector="Border.chip">
     <Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}" />
     <Setter Property="CornerRadius" Value="4" />
-    <Setter Property="Padding" Value="3,8" />
+    <Setter Property="Padding" Value="8,3" />
   </Style>
   <Style Selector="Border.chip.yo">
     <Setter Property="Background" Value="{DynamicResource SpeakerYoSubtleBrush}" />
   </Style>
-  <Style Selector="Border.chip.yo > TextBlock">
+  <Style Selector="Border.chip.yo TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource SpeakerYoBrush}" />
+  </Style>
+  <Style Selector="Border.chip.yo Ellipse">
+    <Setter Property="Fill" Value="{DynamicResource SpeakerYoBrush}" />
   </Style>
   <Style Selector="Border.chip.otros">
     <Setter Property="Background" Value="{DynamicResource SpeakerOtrosSubtleBrush}" />
   </Style>
-  <Style Selector="Border.chip.otros > TextBlock">
+  <Style Selector="Border.chip.otros TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource SpeakerOtrosBrush}" />
+  </Style>
+  <Style Selector="Border.chip.otros Ellipse">
+    <Setter Property="Fill" Value="{DynamicResource SpeakerOtrosBrush}" />
+  </Style>
+
+  <!-- Única animación del diseño: el punto rojo late mientras se graba.
+       Se anima el tamaño (8 → 10 px, 1,25×) dentro de un contenedor fijo para no mover nada. -->
+  <Style Selector="Ellipse.pulse">
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Height" Value="8" />
+    <Style.Animations>
+      <Animation Duration="0:0:1.4" IterationCount="Infinite" PlaybackDirection="Alternate">
+        <KeyFrame Cue="0%">
+          <Setter Property="Width" Value="8" />
+          <Setter Property="Height" Value="8" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="Width" Value="10" />
+          <Setter Property="Height" Value="10" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
   </Style>
 
   <!-- Barra de participación de 6 px. El color llega por Foreground (color del hablante). -->
@@ -378,25 +403,6 @@
   <Style Selector="Button.action.rail">
     <Setter Property="Margin" Value="8,0,8,12" />
     <Setter Property="Padding" Value="0" />
-  </Style>
-
-  <!-- Línea de transcripción con la etiqueta del hablante. -->
-  <Style Selector="Border.line">
-    <Setter Property="CornerRadius" Value="4" />
-    <Setter Property="Padding" Value="6,1" />
-    <Setter Property="MinWidth" Value="48" />
-  </Style>
-  <Style Selector="Border.line.yo">
-    <Setter Property="Background" Value="{DynamicResource SpeakerYoSubtleBrush}" />
-  </Style>
-  <Style Selector="Border.line.yo > TextBlock">
-    <Setter Property="Foreground" Value="{DynamicResource SpeakerYoBrush}" />
-  </Style>
-  <Style Selector="Border.line.otros">
-    <Setter Property="Background" Value="{DynamicResource SpeakerOtrosSubtleBrush}" />
-  </Style>
-  <Style Selector="Border.line.otros > TextBlock">
-    <Setter Property="Foreground" Value="{DynamicResource SpeakerOtrosBrush}" />
   </Style>
 
   <!-- Formularios. -->

@@ -69,7 +69,7 @@ public class AiTests
         var (vm, store, id, _) = History(() => null);
         using var _s = store;
         await vm.AnalyzeMeetingAsync(id);
-        Assert.Contains("pestaña IA", vm.Message);
+        Assert.Contains("Conecta tu IA", vm.Message);
         Assert.Null(store.GetInsights(id));
     }
 
@@ -205,7 +205,7 @@ public class AiTests
 
         Assert.False(asked);
         Assert.False(vm.IsRunning);
-        Assert.Contains("pestaña IA", vm.LastLog);
+        Assert.Contains("Ajustes", vm.LastLog);
         await Assert.ThrowsAsync<AiException>(() => transcriber.TranscribeAsync([0f], default));
         transcriber.Set(new FakeTranscriber(TimeSpan.Zero));
         Assert.Null(transcriber.Problem);

@@ -99,7 +99,7 @@ public sealed partial class HistoryViewModel(ITranscriptStore store, string expo
         IChatModel? model;
         try { model = chat?.Invoke(); }
         catch (Exception ex) { Message = ex.Message; return; }
-        if (model is null) { Message = "Conecta una IA en la pestaña IA para analizar reuniones."; return; }
+        if (model is null) { Message = "Conecta tu IA para analizar esta reunión."; return; }
 
         var segments = store.GetSegments(meetingId);
         if (segments.Count == 0) { Message = $"La reunión #{meetingId} no tiene texto para analizar."; return; }

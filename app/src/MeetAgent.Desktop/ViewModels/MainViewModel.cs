@@ -82,6 +82,10 @@ public sealed partial class MainViewModel : ObservableObject
     public event Action<long>? MeetingEnded;
     public int SegmentCount => Lines.Count;
 
+    /// <summary>La última reunión guardada, para el estado vacío de Grabar.</summary>
+    public MeetingItem? LastMeeting => History?.Meetings.FirstOrDefault();
+    public bool HasLastMeeting => LastMeeting is not null;
+
     /// <summary>Página visible en el shell.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Page), nameof(IsRecordPage), nameof(IsHistoryPage),
@@ -128,7 +132,13 @@ public sealed partial class MainViewModel : ObservableObject
             connect.Changed += RefreshAiState;
             connect.StartRequested += () => CurrentPage = ShellPage.Record;
         }
+        if (History is { } history)
+        {
+            history.Meetings.CollectionChanged += (_, _) => RefreshLastMeeting();
+            history.Refresh();
+        }
         RefreshAiState();
+        RefreshLastMeeting();
         CurrentPage = HasUsableAi ? ShellPage.Record : ShellPage.Connect;
     }
 
@@ -136,6 +146,12 @@ public sealed partial class MainViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HasUsableAi));
         OnPropertyChanged(nameof(IaStatusText));
+    }
+
+    private void RefreshLastMeeting()
+    {
+        OnPropertyChanged(nameof(LastMeeting));
+        OnPropertyChanged(nameof(HasLastMeeting));
     }
 
     partial void OnCurrentPageChanged(ShellPage value)
@@ -182,8 +198,8 @@ public sealed partial class MainViewModel : ObservableObject
 
     public string StatusText => IsBotRunning ? "En vivo · bot en el Meet"
         : IsRunning
-        ? Consent == Consent.RecordAndTranscribe ? "En vivo · grabando y transcribiendo" : "En vivo · solo transcribiendo"
-        : "Detenido";
+        ? Consent == Consent.RecordAndTranscribe ? "En vivo · grabando" : "En vivo · solo transcribiendo"
+        : "Listo para grabar";
 
     public string DiskText => IsBotRunning ? "Audio: no se guarda (el bot solo transcribe)"
         : Consent == Consent.RecordAndTranscribe ? "Audio: se guarda en data/" : "Audio: no se guarda";
@@ -212,12 +228,12 @@ public sealed partial class MainViewModel : ObservableObject
             bot.Log += msg => _ui(() => LastLog = msg);
             Lines.Clear();
             OnPropertyChanged(nameof(SegmentCount));
-            var id = await bot.StartAsync(code, $"Meet {_now():yyyy-MM-dd HH:mm}", CancellationToken.None);
+            await bot.StartAsync(code, $"Meet {_now():yyyy-MM-dd HH:mm}", CancellationToken.None);
             _bot = bot;
             IsBotRunning = true;
             _startedAt = _now();
             _clock = new Timer(_ => _ui(() => Elapsed = TimeFormat.Hms(_now() - _startedAt)), null, 0, 1000);
-            LastLog = $"Reunión #{id}: bot pedido. Admítelo en el Meet.";
+            LastLog = "Le pedimos al bot que entre al Meet. Admítelo en la reunión.";
             _ = bot.Completion.ContinueWith(_ => _ui(OnBotEnded), TaskScheduler.Default);
         }
         catch (Exception ex)
@@ -248,7 +264,8 @@ public sealed partial class MainViewModel : ObservableObject
         _clock = null;
         IsBotRunning = false;
         _bot = null;
-        LastLog = $"Reunión del bot guardada · {SegmentCount} segmentos";
+        LastLog = "La reunión del bot terminó y quedó guardada.";
+        History?.Refresh();
     }
 
     [RelayCommand(CanExecute = nameof(CanToggle))]
@@ -300,7 +317,7 @@ public sealed partial class MainViewModel : ObservableObject
             if (!await _session.StartAsync(consent, title)) return Consent.None;
             _startedAt = _now();
             IsRunning = true;
-            LastLog = $"Reunión #{_session.MeetingId} iniciada";
+            LastLog = "Reunión iniciada.";
             _clock = new Timer(_ => _ui(() => Elapsed = TimeFormat.Hms(_now() - _startedAt)), null, 0, 1000);
             _ = _session.Completion.ContinueWith(_ => _ui(OnSessionEnded), TaskScheduler.Default);
         }
@@ -334,10 +351,8 @@ public sealed partial class MainViewModel : ObservableObject
         _clock?.Dispose();
         _clock = null;
         IsRunning = false;
-        var p50 = _session.Stats is { Latencies.Count: > 0 } st
-            ? st.Latencies.Order().ElementAt(st.Latencies.Count / 2).TotalSeconds
-            : 0;
-        LastLog = $"Reunión #{_session.MeetingId} guardada · {SegmentCount} segmentos · latencia p50 {p50:F1} s";
+        LastLog = "Reunión guardada.";
+        History?.Refresh();
         if (_session.MeetingId is { } id) MeetingEnded?.Invoke(id);
     }
 }

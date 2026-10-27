@@ -10,7 +10,7 @@ namespace MeetAgent.Desktop.Services;
 public sealed class SwitchableTranscriber : ITranscriber
 {
     private ITranscriber? _inner;
-    private string? _problem = "falta configurar la transcripción en la pestaña IA";
+    private string? _problem = "falta conectar un transcriptor en Ajustes";
 
     public string Name => _inner?.Name ?? "sin configurar";
 
@@ -21,7 +21,7 @@ public sealed class SwitchableTranscriber : ITranscriber
     {
         var old = _inner;
         _inner = transcriber;
-        _problem = problem ?? "falta configurar la transcripción en la pestaña IA";
+        _problem = problem ?? "falta conectar un transcriptor en Ajustes";
         if (old is not null && !ReferenceEquals(old, transcriber)) _ = old.DisposeAsync();
     }
 

@@ -72,7 +72,7 @@ public sealed class AppServices : IAsyncDisposable
         Settings = s;
         if (Session.IsRunning) return;
         if (_fake) { Transcriber.Set(new FakeTranscriber()); return; }
-        if (s.Transcription is null) { Transcriber.Set(null, "elige quién transcribe en la pestaña IA (OpenAI, Groq o tu servidor)"); return; }
+        if (s.Transcription is null) { Transcriber.Set(null, "conecta un transcriptor en Ajustes (Groq es gratis)"); return; }
         try { Transcriber.Set(AiFactory.CreateTranscriber(s.Transcription)); }
         catch (AiException ex) { Transcriber.Set(null, ex.Message.TrimEnd('.')); }
     }

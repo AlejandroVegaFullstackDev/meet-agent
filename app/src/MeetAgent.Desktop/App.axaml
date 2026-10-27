@@ -21,14 +21,17 @@
   </Application.DataTemplates>
 
   <Application.Resources>
-    <!-- Una línea de transcripción: [hh:mm:ss] [Nombre|Yo|Otros] texto (vista en vivo e historial). -->
+    <!-- Una línea de transcripción: [hh:mm:ss] chip del hablante, texto (vista en vivo e historial). -->
     <DataTemplate x:Key="LineTemplate" x:DataType="vm:TranscriptLine">
-      <Grid ColumnDefinitions="Auto,Auto,*" Margin="0,4">
-        <TextBlock Text="{Binding Time, StringFormat='[{0}]'}" Classes="timestamp"
+      <Grid ColumnDefinitions="Auto,Auto,*" Margin="0,5">
+        <TextBlock Text="{Binding Time}" Classes="timestamp"
                    VerticalAlignment="Top" Margin="0,3,10,0" />
-        <Border Grid.Column="1" Classes="line" Classes.yo="{Binding IsMe}" Classes.otros="{Binding !IsMe}"
-                Margin="0,1,10,0" VerticalAlignment="Top">
-          <TextBlock Text="{Binding SpeakerLabel}" Classes="label" HorizontalAlignment="Center" />
+        <Border Grid.Column="1" Classes="chip" Classes.yo="{Binding IsMe}" Classes.otros="{Binding !IsMe}"
+                Margin="0,0,10,0" VerticalAlignment="Top">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Ellipse Width="6" Height="6" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding SpeakerLabel}" Classes="label" TextTrimming="CharacterEllipsis" MaxWidth="120" />
+          </StackPanel>
         </Border>
         <SelectableTextBlock Grid.Column="2" Text="{Binding Text}" TextWrapping="Wrap" Classes="body" />
       </Grid>

@@ -55,7 +55,7 @@ public class MainViewModelTests
         var vm = new MainViewModel(Fakes.Session(store, rec), "falso", () => Task.FromResult(Consent.RecordAndTranscribe),
             ui: a => Dispatcher.UIThread.Post(a));
         await vm.ToggleCommand.ExecuteAsync(null);
-        Assert.Equal("En vivo · grabando y transcribiendo", vm.StatusText);
+        Assert.Equal("En vivo · grabando", vm.StatusText);
         Assert.Equal(2, rec.Opened);
         await vm.ToggleCommand.ExecuteAsync(null);
         Assert.Equal(["grabar"], store.Consents);
