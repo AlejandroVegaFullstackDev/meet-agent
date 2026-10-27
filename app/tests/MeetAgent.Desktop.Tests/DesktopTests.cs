@@ -189,8 +189,8 @@ public class ScreenshotTests
         var history = new HistoryViewModel(store, Path.GetTempPath());
         var vm = new MainViewModel(Fakes.Session(new Fakes.Store(), new Fakes.Recorders()), "small-q5_1 (4 hilos)", () => Task.FromResult(Consent.None)) { History = history };
         var w = new MainWindow { DataContext = vm };
+        vm.CurrentPage = ShellPage.History;
         w.Show();
-        w.FindControl<TabControl>("Tabs")!.SelectedIndex = 1;
         Dispatcher.UIThread.RunJobs();
         history.Selected = history.Meetings[0];
         Dispatcher.UIThread.RunJobs();
@@ -199,15 +199,15 @@ public class ScreenshotTests
     }
 
     [AvaloniaFact]
-    public void Pestana_ia()
+    public void Pagina_conectar()
     {
         var vm = new MainViewModel(Fakes.Session(new Fakes.Store(), new Fakes.Recorders()), "sin configurar", () => Task.FromResult(Consent.None))
         {
-            Ai = new AiViewModel(new MeetAgent.Ai.AiSettings(), _ => { }),
+            Connect = new ConnectViewModel(new MeetAgent.Ai.AiSettings(), _ => { }),
         };
+        vm.CurrentPage = ShellPage.Connect;
         var w = new MainWindow { DataContext = vm };
         w.Show();
-        w.FindControl<TabControl>("Tabs")!.SelectedIndex = 2;
         Dispatcher.UIThread.RunJobs();
         w.CaptureRenderedFrame()!.Save(Path.Combine(ScreensDir(), "ia.png"));
     }

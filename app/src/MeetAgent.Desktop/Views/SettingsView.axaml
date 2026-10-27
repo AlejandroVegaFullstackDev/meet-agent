@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MeetAgent.Desktop.ViewModels"
+             x:Class="MeetAgent.Desktop.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+
+  <ScrollViewer>
+    <StackPanel Margin="20" Spacing="20" MaxWidth="660" HorizontalAlignment="Left">
+      <TextBlock Text="Ajustes" Classes="display" />
+
+      <Border Classes="card" Padding="16">
+        <StackPanel Spacing="8">
+          <TextBlock Text="TU IA" Classes="section" />
+          <TextBlock Text="{Binding AiName}" Classes="body-strong" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card" Padding="16">
+        <StackPanel Spacing="8">
+          <TextBlock Text="REUNIONES" Classes="section" />
+          <CheckBox IsChecked="{Binding AnalyzeWhenMeetingEnds}"
+                    Content="Analizar cada reunión al terminar" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card" Padding="16">
+        <StackPanel Spacing="4">
+          <TextBlock Text="PRIVACIDAD" Classes="section" />
+          <TextBlock Text="El audio y las transcripciones se quedan en este equipo."
+                     Classes="body-sm" Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

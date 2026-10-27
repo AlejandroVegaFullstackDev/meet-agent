@@ -361,6 +361,72 @@
     <Setter Property="Foreground" Value="{DynamicResource BrandBrush}" />
   </Style>
 
+  <!-- Barra lateral del shell. -->
+  <Style Selector="Border.sidebar">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="0,0,1,0" />
+  </Style>
+  <Style Selector="Button.nav.rail">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.action">
+    <Setter Property="Margin" Value="12,0,12,12" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.action.rail">
+    <Setter Property="Margin" Value="8,0,8,12" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <!-- Línea de transcripción con la etiqueta del hablante. -->
+  <Style Selector="Border.line">
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="6,1" />
+    <Setter Property="MinWidth" Value="48" />
+  </Style>
+  <Style Selector="Border.line.yo">
+    <Setter Property="Background" Value="{DynamicResource SpeakerYoSubtleBrush}" />
+  </Style>
+  <Style Selector="Border.line.yo > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource SpeakerYoBrush}" />
+  </Style>
+  <Style Selector="Border.line.otros">
+    <Setter Property="Background" Value="{DynamicResource SpeakerOtrosSubtleBrush}" />
+  </Style>
+  <Style Selector="Border.line.otros > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource SpeakerOtrosBrush}" />
+  </Style>
+
+  <!-- Formularios. -->
+  <Style Selector="TextBox">
+    <Setter Property="MinHeight" Value="36" />
+    <Setter Property="Padding" Value="10,8" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+    <Setter Property="FontSize" Value="14" />
+  </Style>
+  <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+    <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
+    <Setter Property="BorderThickness" Value="2" />
+  </Style>
+  <Style Selector="CheckBox">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+  </Style>
+
+  <!-- Títulos de sección en mayúsculas pequeñas. -->
+  <Style Selector="TextBlock.section">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="LineHeight" Value="16" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
+  </Style>
+
   <!-- Opción del diálogo de consentimiento: botón grande con título y descripción. -->
   <Style Selector="Button.choice">
     <Setter Property="Height" Value="NaN" />

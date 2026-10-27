@@ -1,7 +1,40 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MeetAgent.Desktop.ViewModels"
+             xmlns:views="using:MeetAgent.Desktop.Views"
              x:Class="MeetAgent.Desktop.App"
              RequestedThemeVariant="Default">
+
+  <Application.DataTemplates>
+    <DataTemplate DataType="{x:Type vm:MainViewModel}">
+      <views:RecordView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:HistoryViewModel}">
+      <views:HistoryView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:ConnectViewModel}">
+      <views:ConnectView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
+      <views:SettingsView />
+    </DataTemplate>
+  </Application.DataTemplates>
+
+  <Application.Resources>
+    <!-- Una línea de transcripción: [hh:mm:ss] [Nombre|Yo|Otros] texto (vista en vivo e historial). -->
+    <DataTemplate x:Key="LineTemplate" x:DataType="vm:TranscriptLine">
+      <Grid ColumnDefinitions="Auto,Auto,*" Margin="0,4">
+        <TextBlock Text="{Binding Time, StringFormat='[{0}]'}" Classes="timestamp"
+                   VerticalAlignment="Top" Margin="0,3,10,0" />
+        <Border Grid.Column="1" Classes="line" Classes.yo="{Binding IsMe}" Classes.otros="{Binding !IsMe}"
+                Margin="0,1,10,0" VerticalAlignment="Top">
+          <TextBlock Text="{Binding SpeakerLabel}" Classes="label" HorizontalAlignment="Center" />
+        </Border>
+        <SelectableTextBlock Grid.Column="2" Text="{Binding Text}" TextWrapping="Wrap" Classes="body" />
+      </Grid>
+    </DataTemplate>
+  </Application.Resources>
+
   <Application.Styles>
     <FluentTheme>
       <FluentTheme.Palettes>

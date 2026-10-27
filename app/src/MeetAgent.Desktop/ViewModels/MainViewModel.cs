@@ -11,6 +11,15 @@ namespace MeetAgent.Desktop.ViewModels;
 /// <summary>Resultado de un inicio pedido por un agente: lo que eligió el usuario en el diálogo.</summary>
 public sealed record AgentStartResult(Consent Consent, long? MeetingId, bool AlreadyRunning);
 
+/// <summary>Páginas del shell (barra lateral + contenido).</summary>
+public enum ShellPage
+{
+    Record,
+    History,
+    Connect,
+    Settings,
+}
+
 public sealed record TranscriptLine(string Time, Speaker Speaker, string Text, string? SpeakerName = null)
 {
     public string SpeakerLabel => string.IsNullOrWhiteSpace(SpeakerName) ? Speaker.ToString() : SpeakerName;
@@ -54,13 +63,19 @@ public sealed partial class MainViewModel : ObservableObject
 
     public ObservableCollection<TranscriptLine> Lines { get; } = new();
 
-    /// <summary>Historial de todas las reuniones (pestaña «Historial»).</summary>
+    /// <summary>Historial de todas las reuniones.</summary>
     public HistoryViewModel? History { get; init; }
 
-    /// <summary>Configuración de la IA (pestaña «IA»).</summary>
+    /// <summary>Onboarding «Conecta tu IA».</summary>
+    public ConnectViewModel? Connect { get; init; }
+
+    /// <summary>Ajustes de la app.</summary>
+    public SettingsViewModel? Settings { get; init; }
+
+    /// <summary>Configuración de la IA. Se retira cuando la vista de Conectar absorba todo.</summary>
     public AiViewModel? Ai { get; init; }
 
-    /// <summary>Quién transcribe (cambia al guardar la pestaña IA).</summary>
+    /// <summary>Quién transcribe (cambia al guardar los ajustes).</summary>
     [ObservableProperty] private string _transcriberName;
 
     /// <summary>Si devuelve texto, no se puede empezar y se muestra ese motivo (p. ej. falta configurar la IA).</summary>
@@ -70,12 +85,76 @@ public sealed partial class MainViewModel : ObservableObject
     public event Action<long>? MeetingEnded;
     public int SegmentCount => Lines.Count;
 
+    /// <summary>Página visible en el shell.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ButtonText), nameof(StatusText))]
+    [NotifyPropertyChangedFor(nameof(Page), nameof(IsRecordPage), nameof(IsHistoryPage),
+        nameof(IsConnectPage), nameof(IsSettingsPage))]
+    private ShellPage _currentPage;
+
+    /// <summary>Contenido de la derecha: un view model, resuelto por los DataTemplates de App.axaml.</summary>
+    public object? Page => CurrentPage switch
+    {
+        ShellPage.History => History,
+        ShellPage.Connect => Connect,
+        ShellPage.Settings => Settings,
+        _ => this,
+    };
+
+    public bool IsRecordPage => CurrentPage == ShellPage.Record;
+    public bool IsHistoryPage => CurrentPage == ShellPage.History;
+    public bool IsConnectPage => CurrentPage == ShellPage.Connect;
+    public bool IsSettingsPage => CurrentPage == ShellPage.Settings;
+
+    /// <summary>Barra lateral estrecha (48 px) cuando la ventana no llega a 680 px.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SidebarWidth))]
+    private bool _isRail;
+
+    public double SidebarWidth => IsRail ? 48 : 200;
+
+    /// <summary>Botón de la barra lateral: el mismo que inicia o termina la reunión.</summary>
+    public string SidebarActionText => IsBusy ? (IsRunning ? "Terminando…" : "Preparando…")
+        : IsRunning ? "Terminar" : "Grabar";
+
+    /// <summary>Estado de la IA en la barra lateral («Sin IA conectada» o «Claude ✓»).</summary>
+    public bool HasUsableAi => Connect?.HasUsableAi == true;
+    public string IaStatusText => Connect?.StatusText ?? "Sin IA conectada";
+
+    /// <summary>
+    /// Primer arranque: si no hay una IA usable abre «Conecta tu IA»; si ya la hay, Grabar.
+    /// También engancha el aviso de cambios de la página de conexión.
+    /// </summary>
+    public void Start()
+    {
+        if (Connect is { } connect) connect.Changed += RefreshAiState;
+        RefreshAiState();
+        CurrentPage = HasUsableAi ? ShellPage.Record : ShellPage.Connect;
+    }
+
+    private void RefreshAiState()
+    {
+        OnPropertyChanged(nameof(HasUsableAi));
+        OnPropertyChanged(nameof(IaStatusText));
+    }
+
+    partial void OnCurrentPageChanged(ShellPage value)
+    {
+        // La extensión y el bot escriben desde otros procesos: se relee al abrir cada página.
+        if (value == ShellPage.History) History?.Refresh();
+        if (value == ShellPage.Settings) Settings?.Refresh();
+    }
+
+    [RelayCommand] private void ShowRecord() => CurrentPage = ShellPage.Record;
+    [RelayCommand] private void ShowHistory() => CurrentPage = ShellPage.History;
+    [RelayCommand] private void ShowConnect() => CurrentPage = ShellPage.Connect;
+    [RelayCommand] private void ShowSettings() => CurrentPage = ShellPage.Settings;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ButtonText), nameof(StatusText), nameof(SidebarActionText))]
     private bool _isRunning;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ButtonText), nameof(StatusText))]
+    [NotifyPropertyChangedFor(nameof(ButtonText), nameof(StatusText), nameof(SidebarActionText))]
     [NotifyCanExecuteChangedFor(nameof(ToggleCommand), nameof(JoinBotCommand))]
     private bool _isBusy;
 

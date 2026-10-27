@@ -6,6 +6,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using MeetAgent.Ai;
 using MeetAgent.Control;
 using MeetAgent.Core;
 using MeetAgent.Desktop.Services;
@@ -36,17 +37,24 @@ public sealed class App : Application
             Console.Error.WriteLine($"MeetAgent · transcriptor: {_services.Transcriber.Name} · datos: {AppServices.DataDir}");
             _window = new MainWindow();
             var services = _services;
+            void SaveSettings(AiSettings s)
+            {
+                services.SaveSettings(s);
+                _vm!.TranscriberName = services.Transcriber.Name;
+            }
+
+            var connect = new ConnectViewModel(services.Settings, SaveSettings);
+            var settings = new SettingsViewModel(services.Settings, SaveSettings);
+            connect.Changed += () => settings.Reload(services.Settings);
+            settings.Changed += () => connect.Reload(services.Settings);
             _vm = new MainViewModel(services.Session, services.Transcriber.Name,
                 askConsent: () => ConsentDialog.AskAsync(ShowWindow()),
                 ui: a => Dispatcher.UIThread.Post(a),
                 botFactory: services.BotFactory)
             {
                 History = new HistoryViewModel(services.Store, AppServices.DataDir, services.Insights, services.CreateChat),
-                Ai = new AiViewModel(services.Settings, s =>
-                {
-                    services.SaveSettings(s);
-                    _vm!.TranscriberName = services.Transcriber.Name;
-                }),
+                Connect = connect,
+                Settings = settings,
                 CannotStartReason = () => services.Transcriber.Problem,
             };
             // Con «analizar al terminar», cada reunión de la app se analiza sola con la IA del usuario.
@@ -56,6 +64,7 @@ public sealed class App : Application
             };
             _window.DataContext = _vm;
             _vm.PropertyChanged += OnVmChanged;
+            _vm.Start();
             _idleIcon = LoadIcon("idle.png");
             _liveIcon = LoadIcon("live.png");
             _window.Icon = _idleIcon;

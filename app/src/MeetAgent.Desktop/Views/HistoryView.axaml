@@ -1,0 +1,116 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MeetAgent.Desktop.ViewModels"
+             x:Class="MeetAgent.Desktop.Views.HistoryView"
+             x:DataType="vm:HistoryViewModel">
+
+  <!-- Todas las reuniones: micrófono, bot de Meet y subtítulos de la extensión. -->
+  <Grid ColumnDefinitions="300,12,*" Margin="20">
+    <DockPanel>
+      <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+        <TextBox Text="{Binding Query}" Watermark="Buscar en todas (prefijo*, &quot;frase&quot;)" />
+        <Button Grid.Column="1" Content="Buscar" Command="{Binding SearchCommand}" Classes="secondary" Margin="6,0,0,0" />
+      </Grid>
+      <!-- Resultados de búsqueda (si los hay) -->
+      <ListBox DockPanel.Dock="Top" ItemsSource="{Binding Results}" MaxHeight="200" Margin="0,0,0,8"
+               IsVisible="{Binding Results.Count}" x:Name="ResultsList">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:SearchResultItem">
+            <StackPanel Spacing="1">
+              <TextBlock Classes="caption" Foreground="{DynamicResource InkMutedBrush}">
+                <TextBlock.Text>
+                  <MultiBinding StringFormat="{}#{0} {1} · [{2}] {3}">
+                    <Binding Path="MeetingId" /><Binding Path="MeetingTitle" /><Binding Path="Time" /><Binding Path="Speaker" />
+                  </MultiBinding>
+                </TextBlock.Text>
+              </TextBlock>
+              <TextBlock Text="{Binding Snippet}" TextWrapping="Wrap" Classes="body-sm" />
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+      <ListBox ItemsSource="{Binding Meetings}" SelectedItem="{Binding Selected}" x:Name="MeetingsList">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:MeetingItem">
+            <StackPanel Spacing="1">
+              <TextBlock Text="{Binding Title}" Classes="body-strong" TextTrimming="CharacterEllipsis" />
+              <TextBlock Classes="caption" Foreground="{DynamicResource InkMutedBrush}">
+                <TextBlock.Text>
+                  <MultiBinding StringFormat="{}{0} · {1}">
+                    <Binding Path="When" /><Binding Path="Duration" />
+                  </MultiBinding>
+                </TextBlock.Text>
+              </TextBlock>
+              <TextBlock Classes="caption" Foreground="{DynamicResource InkMutedBrush}">
+                <TextBlock.Text>
+                  <MultiBinding StringFormat="{}{0} · {1} segmentos">
+                    <Binding Path="Source" /><Binding Path="SegmentCount" />
+                  </MultiBinding>
+                </TextBlock.Text>
+              </TextBlock>
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+
+    <DockPanel Grid.Column="2">
+      <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,8">
+        <TextBlock Text="{Binding Selected.Title, FallbackValue='Elige una reunión'}" Classes="heading-sm"
+                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <Button Grid.Column="1" Content="Actualizar" Command="{Binding RefreshCommand}" Classes="secondary sm" Margin="6,0,0,0" />
+        <Button Grid.Column="2" Content="Exportar .md" Command="{Binding ExportCommand}" Classes="secondary sm" Margin="6,0,0,0" />
+      </Grid>
+      <TextBlock DockPanel.Dock="Bottom" Text="{Binding Message}" Classes="caption" Margin="0,8,0,0"
+                 Foreground="{DynamicResource InkMutedBrush}" TextTrimming="CharacterEllipsis" />
+      <Grid RowDefinitions="*,Auto">
+        <Border Classes="card">
+          <ScrollViewer Padding="14,10">
+            <ItemsControl ItemsSource="{Binding Lines}" ItemTemplate="{StaticResource LineTemplate}" />
+          </ScrollViewer>
+        </Border>
+
+        <!-- Estadísticas (locales, sin IA) y análisis con la IA del usuario -->
+        <Border Grid.Row="1" Classes="card" Margin="0,8,0,0"
+                IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <Expander Header="Estadísticas y análisis" IsExpanded="True" HorizontalAlignment="Stretch">
+            <ScrollViewer MaxHeight="320">
+              <StackPanel Spacing="8" Margin="4,0,4,4">
+                <TextBlock Text="{Binding StatsSummary}" Classes="caption" Foreground="{DynamicResource InkMutedBrush}" />
+                <ItemsControl ItemsSource="{Binding Speakers}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SpeakerRow">
+                      <Grid ColumnDefinitions="150,*,52,70,110" Margin="0,2">
+                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding Share}" Classes="share"
+                                     VerticalAlignment="Center" Margin="8,0" />
+                        <TextBlock Grid.Column="2" Text="{Binding Percent}" Classes="body-strong" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="3" Text="{Binding Time}" Classes="timestamp" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="4" Classes="caption" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource InkMutedBrush}">
+                          <TextBlock.Text>
+                            <MultiBinding StringFormat="{}{0} pal. · {1} interv.">
+                              <Binding Path="Words" /><Binding Path="Turns" />
+                            </MultiBinding>
+                          </TextBlock.Text>
+                        </TextBlock>
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="{Binding InsightsInfo}" Classes="caption" VerticalAlignment="Center"
+                             Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
+                  <Button Grid.Column="1" Content="Analizar con IA" Command="{Binding AnalyzeCommand}"
+                          Classes="secondary sm" Margin="8,0,0,0" />
+                </Grid>
+                <SelectableTextBlock Text="{Binding InsightsText}" TextWrapping="Wrap"
+                                     IsVisible="{Binding InsightsText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              </StackPanel>
+            </ScrollViewer>
+          </Expander>
+        </Border>
+      </Grid>
+    </DockPanel>
+  </Grid>
+</UserControl>

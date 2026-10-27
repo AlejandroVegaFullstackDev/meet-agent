@@ -1,0 +1,25 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MeetAgent.Desktop.ViewModels"
+             x:Class="MeetAgent.Desktop.Views.ConnectView"
+             x:DataType="vm:ConnectViewModel">
+
+  <ScrollViewer>
+    <StackPanel Margin="20" Spacing="20" MaxWidth="660" HorizontalAlignment="Left">
+      <StackPanel Spacing="4">
+        <TextBlock Text="Conecta tu IA" Classes="display" />
+        <TextBlock Text="MeetAgent analiza tus reuniones con la IA que ya usas. Elige una opción:"
+                   Classes="body" Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
+      </StackPanel>
+
+      <Border Classes="card" Padding="16">
+        <StackPanel Spacing="8">
+          <TextBlock Text="Tu IA" Classes="section" />
+          <TextBlock Text="{Binding StatusText}" Classes="body-strong" />
+          <TextBlock Text="Las tarjetas para entrar con tu cuenta llegan en la siguiente fase."
+                     Classes="body-sm" Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>
