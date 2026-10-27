@@ -15,7 +15,7 @@ Meet (subtítulos) → extensión → native messaging → meetagent-host → SQ
    El script detecta Linux o macOS y registra el host en Firefox, Chrome, Chromium, Edge y Brave.
 2. Carga la extensión (carpeta `extension/`):
    - **Edge / Chrome / Chromium / Brave:** `edge://extensions` (o `chrome://extensions`, `brave://extensions`) → activa *Modo de desarrollador* → *Cargar descomprimida* → elige `extension/`.
-   - **Firefox (incluido el de snap de Ubuntu):** abre `about:debugging#/runtime/this-firefox` → *Cargar complemento temporal…* → elige `extension/manifest.json`.
+   - **Firefox (incluido el de snap de Ubuntu):** abre `about:debugging#/runtime/this-firefox` → *Cargar complemento temporal…* → elige `dist/firefox/manifest.json` (créalo antes con `scripts/build-firefox.sh`; el `manifest.json` de `extension/` es el de Chromium, con `service_worker`).
      - La primera vez que pulses *Transcribir*, Ubuntu pregunta si Firefox puede abrir **MeetAgent** (portal del sistema): acepta.
      - Si dice que no encuentra MeetAgent: en `about:config` pon `widget.use-xdg-desktop-portal.native-messaging` = `1` y reinicia Firefox.
      - En Firefox normal el complemento temporal se quita al cerrar Firefox (hay que volver a cargarlo, 10 s). Para dejarlo fijo: firmarlo como *no listado* en addons.mozilla.org con tu cuenta (gratis, no se publica).

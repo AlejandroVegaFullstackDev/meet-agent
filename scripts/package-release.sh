@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Arma los paquetes para repartir MeetAgent (modo extensión, sin app de escritorio):
-#   dist/release/meetagent-extension-<v>.zip     → para la tienda (Chrome Web Store / AMO) o cargar a mano
+#   dist/release/meetagent-extension-<v>.zip     → para cargar a mano (con key: ID fijo)
+#   dist/release/meetagent-extension-tienda-<v>.zip → para subir a Chrome Web Store / Edge Add-ons (sin key)
 #   dist/release/meetagent-win-x64-<v>.zip       → conector + MCP + extensión + install.ps1 + LEEME.md
 #   dist/release/meetagent-linux-x64-<v>.tar.gz  → conector + MCP + extensión + install.sh + LEEME.md
 #   dist/release/meetagent-macos-arm64-<v>.tar.gz  (y -x64)  → igual, para macOS
@@ -22,6 +23,18 @@ with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
             for root, _, names in os.walk(p):
                 for n in names: z.write(os.path.join(root, n), os.path.relpath(os.path.join(root, n), 'extension'))
         else: z.write(p, f)
+PY
+# Para subir a Chrome Web Store / Edge Add-ons: igual pero sin "key" (las tiendas la rechazan y asignan su propio ID).
+python3 - "$OUT/meetagent-extension-$VERSION.zip" "$OUT/meetagent-extension-tienda-$VERSION.zip" <<'PY'
+import sys, zipfile, json
+src, out = sys.argv[1], sys.argv[2]
+with zipfile.ZipFile(src) as zi, zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as zo:
+    for n in zi.namelist():
+        data = zi.read(n)
+        if n == 'manifest.json':
+            m = json.loads(data); m.pop('key', None)
+            data = json.dumps(m, ensure_ascii=False, indent=2).encode()
+        zo.writestr(n, data)
 PY
 
 for rid in win-x64 linux-x64 osx-arm64 osx-x64; do
