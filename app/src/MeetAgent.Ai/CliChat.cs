@@ -73,7 +73,7 @@ public sealed class CliChat(Connection connection, ProcessRunner? run = null, st
         var (exit, output) = await _run(info, prompt, ct).ConfigureAwait(false);
         EnsureOk(exit, output);
         var answer = File.Exists(resultPath) ? File.ReadAllText(resultPath) : output;
-        return string.IsNullOrWhiteSpace(answer) ? throw new AiException("Codex no devolvió texto.") : answer.Trim();
+        return string.IsNullOrWhiteSpace(answer) ? throw new AiException("ChatGPT no devolvió una respuesta. Inténtalo de nuevo.") : answer.Trim();
     }
 
     private async Task<string> RunGemini(string exe, string dir, string instructions, string user, CancellationToken ct)
@@ -151,7 +151,7 @@ public sealed class CliChat(Connection connection, ProcessRunner? run = null, st
         {
             // Algunas versiones contestan texto plano: se usa tal cual.
         }
-        return string.IsNullOrWhiteSpace(output) ? throw new AiException("Gemini no devolvió texto.") : output.Trim();
+        return string.IsNullOrWhiteSpace(output) ? throw new AiException("Gemini no devolvió una respuesta. Inténtalo de nuevo.") : output.Trim();
     }
 
     private void EnsureOk(int exit, string output)
