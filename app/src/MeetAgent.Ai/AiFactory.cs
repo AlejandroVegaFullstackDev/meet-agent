@@ -11,9 +11,12 @@ public static class AiFactory
     public static IChatModel CreateChat(Connection c)
     {
         if (!c.IsUsable) throw new AiException("Falta configurar la IA (proveedor, modelo y API key) en la pestaña IA.");
-        return c.Provider == AiProvider.Anthropic
-            ? new AnthropicChat(c.ApiKey!, c.Model.Trim())
-            : new OpenAiCompatibleChat(Http, c.EffectiveBaseUrl, c.ApiKey, c.Model.Trim(), c.Info.Label);
+        return c.Provider switch
+        {
+            AiProvider.ClaudeCuenta or AiProvider.ChatGptCuenta or AiProvider.GeminiCuenta => new CliChat(c),
+            AiProvider.Anthropic => new AnthropicChat(c.ApiKey!, c.Model.Trim()),
+            _ => new OpenAiCompatibleChat(Http, c.EffectiveBaseUrl, c.ApiKey, c.Model.Trim(), c.Info.Label),
+        };
     }
 
     public static ITranscriber CreateTranscriber(Connection c)

@@ -10,8 +10,12 @@ public sealed record Connection(AiProvider Provider, string Model, string? ApiKe
 {
     public ProviderInfo Info => Providers.Get(Provider);
     public string EffectiveBaseUrl => string.IsNullOrWhiteSpace(BaseUrl) ? Info.BaseUrl ?? "" : BaseUrl.Trim().TrimEnd('/');
-    public bool IsUsable => !string.IsNullOrWhiteSpace(Model) && (!Info.NeedsKey || !string.IsNullOrWhiteSpace(ApiKey))
-                            && (Provider == AiProvider.Anthropic || EffectiveBaseUrl.Length > 0);
+
+    /// <summary>Para las cuentas por CLI, usable = el ejecutable está instalado; el resto pide modelo, key y URL.</summary>
+    public bool IsUsable => Info.IsAccount
+        ? AccountDetector.IsInstalled(Provider)
+        : !string.IsNullOrWhiteSpace(Model) && (!Info.NeedsKey || !string.IsNullOrWhiteSpace(ApiKey))
+          && (Provider == AiProvider.Anthropic || EffectiveBaseUrl.Length > 0);
 }
 
 /// <param name="Chat">La IA que analiza las reuniones.</param>

@@ -1,6 +1,11 @@
 namespace MeetAgent.Ai;
 
-public enum AiProvider { OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Groq, Personalizado }
+public enum AiProvider
+{
+    OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, Groq, Personalizado,
+    // Cuentas que ya paga el usuario, usadas por el CLI oficial (sin API key ni URL).
+    ClaudeCuenta, ChatGptCuenta, GeminiCuenta,
+}
 
 /// <param name="BaseUrl">Endpoint compatible con OpenAI (<c>/chat/completions</c>); null para Claude, que usa su SDK.</param>
 /// <param name="TranscriptionModel">Modelo de <c>/audio/transcriptions</c>; null si el proveedor no transcribe audio.</param>
@@ -9,6 +14,10 @@ public sealed record ProviderInfo(AiProvider Provider, string Label, string? Bas
     string? TranscriptionModel, string? KeyUrl, bool NeedsKey = true)
 {
     public bool CanTranscribe => TranscriptionModel is not null;
+
+    /// <summary>Se conecta con la cuenta del usuario a través del CLI oficial.</summary>
+    public bool IsAccount => Provider is AiProvider.ClaudeCuenta or AiProvider.ChatGptCuenta or AiProvider.GeminiCuenta;
+
     public override string ToString() => Label;
 }
 
@@ -27,6 +36,10 @@ public static class Providers
         new(AiProvider.OpenRouter, "OpenRouter (todas con un login)", "https://openrouter.ai/api/v1", "openrouter/auto", null, "https://openrouter.ai/settings/keys"),
         new(AiProvider.Groq, "Groq", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile", "whisper-large-v3-turbo", "https://console.groq.com/keys"),
         new(AiProvider.Personalizado, "Mi servidor (Ollama, LM Studio, vLLM…)", "http://localhost:11434/v1", "qwen3", "whisper-1", null, NeedsKey: false),
+        // Cuentas del usuario por CLI: sin API key y sin URL; el CLI ya tiene la sesión iniciada.
+        new(AiProvider.ClaudeCuenta, "Claude (tu cuenta)", null, "Claude", null, null, NeedsKey: false),
+        new(AiProvider.ChatGptCuenta, "ChatGPT (tu cuenta)", null, "ChatGPT", null, null, NeedsKey: false),
+        new(AiProvider.GeminiCuenta, "Google (tu cuenta)", null, "Gemini", null, null, NeedsKey: false),
     ];
 
     public static ProviderInfo Get(AiProvider p) => All.First(x => x.Provider == p);
