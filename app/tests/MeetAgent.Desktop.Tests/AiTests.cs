@@ -85,39 +85,109 @@ public class AiTests
     }
 
     [AvaloniaFact]
-    public async Task Pestana_ia_guarda_prueba_y_conecta_openrouter()
+    public async Task Conectar_con_api_key_prueba_y_guarda_la_ia()
     {
         AiSettings? saved = null;
         Connection? tested = null;
-        var vm = new AiViewModel(new AiSettings(), s => saved = s,
+        var vm = new ConnectViewModel(new AiSettings(), s => saved = s,
             createChat: c => { tested = c; return new FakeChat("listo", $"{c.Info.Label} · {c.Model}"); },
+            openUrl: _ => { });
+
+        var card = vm.ApiKey;
+        Assert.Equal("Configurar", card.ActionLabel);
+        card.ConnectCommand.Execute(null);              // primero despliega el formulario
+        Assert.True(card.IsExpanded);
+
+        card.SelectedProvider = Providers.Get(AiProvider.OpenAI);
+        card.Model = "gpt-5-mini";
+        card.ApiKey = " sk-openai ";
+        await card.ConnectCommand.ExecuteAsync(null);
+
+        Assert.Equal("gpt-5-mini", tested!.Model);
+        Assert.Equal("sk-openai", saved!.Chat!.ApiKey);
+        Assert.True(card.IsConnected);
+        Assert.Equal("OpenAI ✓", vm.StatusText);
+        Assert.Contains("Conectado", card.Status);
+    }
+
+    [AvaloniaFact]
+    public async Task Conectar_una_cuenta_guarda_la_conexion_sin_key()
+    {
+        AiSettings? saved = null;
+        var detector = new AccountDetector(find: _ => "cli",
+            run: (_, _, _) => Task.FromResult((0, """{"loggedIn":true}""")),
+            launch: _ => { }, pollInterval: TimeSpan.FromMilliseconds(1), loginTimeout: TimeSpan.FromSeconds(1));
+        try
+        {
+            AccountDetector.InstalledOverride = _ => true;
+            var vm = new ConnectViewModel(new AiSettings(), s => saved = s, detector: detector);
+
+            await vm.StartAsync();
+            Assert.Equal("Detectado ✓", vm.Claude.Status);
+
+            await vm.Claude.ConnectCommand.ExecuteAsync(null);
+
+            Assert.Equal(AiProvider.ClaudeCuenta, saved!.Chat!.Provider);
+            Assert.True(vm.Claude.IsConnected);
+            Assert.Equal("Claude ✓", vm.StatusText);
+        }
+        finally { AccountDetector.InstalledOverride = null; }
+    }
+
+    [AvaloniaFact]
+    public async Task Sin_cli_instalado_la_tarjeta_ofrece_instalar()
+    {
+        var opened = "";
+        var detector = new AccountDetector(find: _ => null, launch: _ => { });
+        var vm = new ConnectViewModel(new AiSettings(), _ => { }, detector: detector, openUrl: u => opened = u);
+
+        await vm.StartAsync();
+        Assert.Equal("Instalar", vm.ChatGpt.ActionLabel);
+
+        await vm.ChatGpt.ConnectCommand.ExecuteAsync(null);
+        Assert.Equal(AccountDetector.InstallUrl(AiProvider.ChatGptCuenta), opened);
+        Assert.Contains("Instala Codex", vm.ChatGpt.Status);
+    }
+
+    [AvaloniaFact]
+    public async Task Openrouter_guarda_la_key_y_queda_conectado()
+    {
+        AiSettings? saved = null;
+        var vm = new ConnectViewModel(new AiSettings(), s => saved = s,
+            createChat: _ => new FakeChat("listo"),
             openRouterLogin: _ => Task.FromResult("sk-or-123"), openUrl: _ => { });
 
-        Assert.Equal(AiProvider.Anthropic, vm.ChatProvider.Provider);
-        Assert.Equal("claude-opus-5-5", vm.ChatModel);
-        vm.ChatProvider = Providers.Get(AiProvider.DeepSeek);
-        Assert.Equal("deepseek-chat", vm.ChatModel);
-        vm.ChatModel = "deepseek-reasoner";
-        vm.ChatProvider = Providers.Get(AiProvider.OpenAI);
-        Assert.Equal("deepseek-reasoner", vm.ChatModel); // el modelo escrito a mano no se pisa
+        await vm.OpenRouter.ConnectCommand.ExecuteAsync(null);
 
-        vm.ChatProvider = Providers.Get(AiProvider.OpenAI);
-        vm.ChatModel = "gpt-5-mini";
-        vm.ChatKey = " sk-openai ";
-        vm.Transcribe = true;
-        vm.SaveCommand.Execute(null);
-        Assert.Equal("sk-openai", saved!.Chat!.ApiKey);
-        Assert.Equal("sk-openai", saved.Transcription!.ApiKey); // mismo proveedor: reutiliza la key
-        Assert.Equal("whisper-1", saved.Transcription.Model);
-        Assert.Equal("Guardado.", vm.Status);
-
-        await vm.TestCommand.ExecuteAsync(null);
-        Assert.Equal("gpt-5-mini", tested!.Model);
-        Assert.Contains("Funciona", vm.Status);
-
-        await vm.LoginOpenRouterCommand.ExecuteAsync(null);
-        Assert.Equal(AiProvider.OpenRouter, saved.Chat.Provider);
+        Assert.Equal(AiProvider.OpenRouter, saved!.Chat!.Provider);
         Assert.Equal("sk-or-123", saved.Chat.ApiKey);
+        Assert.True(vm.OpenRouter.IsConnected);
+        Assert.Equal("OpenRouter ✓", vm.StatusText);
+    }
+
+    [AvaloniaFact]
+    public void Primer_arranque_abre_conectar_y_con_ia_abre_grabar()
+    {
+        var main = new MainViewModel(Fakes.Session(new Fakes.Store(), new Fakes.Recorders()), "falso",
+            () => Task.FromResult(Consent.None))
+        {
+            Connect = new ConnectViewModel(new AiSettings(), _ => { }),
+        };
+        main.Start();
+        Assert.Equal(ShellPage.Connect, main.CurrentPage);
+        Assert.False(main.HasUsableAi);
+        Assert.Equal("Sin IA conectada", main.IaStatusText);
+
+        var withAi = new AiSettings(new Connection(AiProvider.OpenAI, "gpt-5-mini", "sk-openai"));
+        var main2 = new MainViewModel(Fakes.Session(new Fakes.Store(), new Fakes.Recorders()), "falso",
+            () => Task.FromResult(Consent.None))
+        {
+            Connect = new ConnectViewModel(withAi, _ => { }),
+        };
+        main2.Start();
+        Assert.Equal(ShellPage.Record, main2.CurrentPage);
+        Assert.True(main2.HasUsableAi);
+        Assert.Equal("OpenAI ✓", main2.IaStatusText);
     }
 
     [AvaloniaFact]

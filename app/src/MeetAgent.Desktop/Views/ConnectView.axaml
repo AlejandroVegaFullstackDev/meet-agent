@@ -5,21 +5,108 @@
              x:DataType="vm:ConnectViewModel">
 
   <ScrollViewer>
-    <StackPanel Margin="20" Spacing="20" MaxWidth="660" HorizontalAlignment="Left">
+    <StackPanel Margin="20" Spacing="16" MaxWidth="660" HorizontalAlignment="Left">
       <StackPanel Spacing="4">
         <TextBlock Text="Conecta tu IA" Classes="display" />
         <TextBlock Text="MeetAgent analiza tus reuniones con la IA que ya usas. Elige una opción:"
                    Classes="body" Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
       </StackPanel>
 
-      <Border Classes="card" Padding="16">
+      <ItemsControl ItemsSource="{Binding Cards}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:ProviderCardViewModel">
+            <Border Classes="card" Padding="16" Margin="0,0,0,8">
+              <StackPanel Spacing="12">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <Border Width="32" Height="32" CornerRadius="8"
+                          Background="{DynamicResource SurfaceSubtleBrush}" VerticalAlignment="Center">
+                    <Panel>
+                      <PathIcon Data="{StaticResource IconSparkle}" Width="16" Height="16"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Foreground="{DynamicResource BrandBrush}"
+                                IsVisible="{Binding UsesAccountIcon}" />
+                      <PathIcon Data="{StaticResource IconKey}" Width="16" Height="16"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Foreground="{DynamicResource BrandBrush}"
+                                IsVisible="{Binding IsApiKey}" />
+                      <PathIcon Data="{StaticResource IconMonitor}" Width="16" Height="16"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Foreground="{DynamicResource BrandBrush}"
+                                IsVisible="{Binding IsOwnModel}" />
+                    </Panel>
+                  </Border>
+
+                  <StackPanel Grid.Column="1" Spacing="1" Margin="12,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Title}" Classes="heading-sm" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Subtitle}" Classes="body-sm"
+                               Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Status}" Classes="caption" TextWrapping="Wrap"
+                               Foreground="{DynamicResource SuccessBrush}" IsVisible="{Binding HasStatus}" />
+                  </StackPanel>
+
+                  <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Border Classes="badge success" IsVisible="{Binding IsConnected}">
+                      <TextBlock Text="Conectado ✓" />
+                    </Border>
+                    <Button Content="{Binding ActionLabel}" Command="{Binding ConnectCommand}"
+                            Classes="secondary sm" IsVisible="{Binding !IsConnected}" />
+                  </StackPanel>
+                </Grid>
+
+                <!-- «Tengo una API key» -->
+                <StackPanel Spacing="8" IsVisible="{Binding ShowApiKeyForm}">
+                  <ComboBox ItemsSource="{Binding ApiProviders}" SelectedItem="{Binding SelectedProvider}"
+                            HorizontalAlignment="Stretch" />
+                  <TextBox Text="{Binding ApiKey}" PasswordChar="•" PlaceholderText="{Binding ApiKeyHint}" />
+                  <TextBox Text="{Binding Model}" PlaceholderText="Modelo" />
+                  <TextBox Text="{Binding ApiBaseUrl}" PlaceholderText="{Binding BaseUrlHint}" />
+                </StackPanel>
+
+                <!-- «Tengo mi propio modelo» -->
+                <StackPanel Spacing="8" IsVisible="{Binding ShowOwnModelForm}">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Text="{Binding OwnBaseUrl}" PlaceholderText="Dirección (http://localhost:11434/v1)" />
+                    <Button Grid.Column="1" Content="Buscar modelos" Command="{Binding DetectModelsCommand}"
+                            Classes="secondary sm" Margin="8,0,0,0" />
+                  </Grid>
+                  <ComboBox ItemsSource="{Binding LocalModels}" SelectedItem="{Binding OwnModel}"
+                            PlaceholderText="Modelos encontrados" HorizontalAlignment="Stretch" />
+                  <TextBox Text="{Binding OwnModel}" PlaceholderText="Nombre del modelo" />
+                  <TextBox Text="{Binding OwnKey}" PasswordChar="•" PlaceholderText="API key (si tu servidor la pide)" />
+                  <TextBlock Text="{Binding ModelsStatus}" Classes="caption"
+                             Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap"
+                             IsVisible="{Binding HasModelsStatus}" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <!-- Transcripción: sin ella se puede analizar, pero no transcribir llamadas. -->
+      <Border Classes="card" Padding="16" IsVisible="{Binding ShowGroqNote}">
         <StackPanel Spacing="8">
-          <TextBlock Text="Tu IA" Classes="section" />
-          <TextBlock Text="{Binding StatusText}" Classes="body-strong" />
-          <TextBlock Text="Las tarjetas para entrar con tu cuenta llegan en la siguiente fase."
-                     Classes="body-sm" Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap" />
+          <TextBlock Text="Para grabar llamadas con audio, conecta también un transcriptor. Groq es gratis."
+                     Classes="body-sm" TextWrapping="Wrap" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Content="Conectar Groq" Command="{Binding ConnectGroqCommand}" Classes="secondary sm" />
+            <Button Content="Crear key" Command="{Binding OpenGroqKeysCommand}" Classes="ghost sm" />
+          </StackPanel>
+          <TextBox Text="{Binding GroqKey}" PasswordChar="•" PlaceholderText="API key de Groq"
+                   IsVisible="{Binding IsGroqFormVisible}" />
+          <TextBlock Text="{Binding GroqStatus}" Classes="caption"
+                     Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap"
+                     IsVisible="{Binding GroqStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         </StackPanel>
       </Border>
+
+      <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+        <TextBlock Text="Pulsa Grabar para transcribir tu próxima reunión. Funciona con Meet, Zoom, Teams o cualquier llamada."
+                   Classes="body-sm" Foreground="{DynamicResource InkMutedBrush}" TextWrapping="Wrap"
+                   VerticalAlignment="Center" MaxWidth="420" HorizontalAlignment="Left" />
+        <Button Grid.Column="1" Content="Empezar a grabar" Command="{Binding StartRecordingCommand}"
+                Classes="primary lg" />
+      </Grid>
     </StackPanel>
   </ScrollViewer>
 </UserControl>

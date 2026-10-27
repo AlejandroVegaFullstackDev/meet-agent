@@ -72,9 +72,6 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Ajustes de la app.</summary>
     public SettingsViewModel? Settings { get; init; }
 
-    /// <summary>Configuración de la IA. Se retira cuando la vista de Conectar absorba todo.</summary>
-    public AiViewModel? Ai { get; init; }
-
     /// <summary>Quién transcribe (cambia al guardar los ajustes).</summary>
     [ObservableProperty] private string _transcriberName;
 
@@ -126,7 +123,11 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     public void Start()
     {
-        if (Connect is { } connect) connect.Changed += RefreshAiState;
+        if (Connect is { } connect)
+        {
+            connect.Changed += RefreshAiState;
+            connect.StartRequested += () => CurrentPage = ShellPage.Record;
+        }
         RefreshAiState();
         CurrentPage = HasUsableAi ? ShellPage.Record : ShellPage.Connect;
     }

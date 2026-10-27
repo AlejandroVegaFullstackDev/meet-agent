@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="MeetAgent.Ai.Tests" />
+    <InternalsVisibleTo Include="MeetAgent.Desktop.Tests" />
   </ItemGroup>
 
 </Project>
