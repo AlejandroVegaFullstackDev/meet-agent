@@ -6,7 +6,7 @@ namespace MeetAgent.Core.Tests;
 
 public class MeetingSessionTests
 {
-    private sealed class ToneSource(Speaker speaker, int seconds) : IAudioSource
+    private sealed class ToneSource(Speaker speaker, int seconds, Action disposed) : IAudioSource
     {
         public Speaker Speaker => speaker;
         public string Description => "tono";
@@ -23,14 +23,15 @@ public class MeetingSessionTests
             }
         }
 
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        public ValueTask DisposeAsync() { disposed(); return ValueTask.CompletedTask; }
     }
 
     private sealed class Sources(int seconds = 5) : IAudioSourceFactory
     {
         public int Created;
-        public IAudioSource CreateMicrophone() { Created++; return new ToneSource(Speaker.Yo, seconds); }
-        public IAudioSource CreateLoopback() { Created++; return new ToneSource(Speaker.Otros, seconds); }
+        public int Disposed;
+        public IAudioSource CreateMicrophone() { Created++; return new ToneSource(Speaker.Yo, seconds, () => Disposed++); }
+        public IAudioSource CreateLoopback() { Created++; return new ToneSource(Speaker.Otros, seconds, () => Disposed++); }
     }
 
     private sealed class EchoTranscriber : ITranscriber
@@ -41,12 +42,14 @@ public class MeetingSessionTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class Recorders : IRecordingSinkFactory
+    private sealed class Recorders(bool failLoopback = false) : IRecordingSinkFactory
     {
         public readonly Dictionary<Speaker, long> Samples = new();
         public int Opened;
+        public int Disposed;
         public IRecordingSink Open(long meetingId, Speaker speaker)
         {
+            if (failLoopback && speaker == Speaker.Otros) throw new IOException("No hay espacio");
             Opened++;
             Samples[speaker] = 0;
             return new Sink(this, speaker);
@@ -54,7 +57,7 @@ public class MeetingSessionTests
         private sealed class Sink(Recorders owner, Speaker sp) : IRecordingSink
         {
             public void Write(ReadOnlySpan<short> samples) { lock (owner) owner.Samples[sp] += samples.Length; }
-            public void Dispose() { }
+            public void Dispose() => owner.Disposed++;
         }
     }
 
@@ -139,5 +142,17 @@ public class MeetingSessionTests
         await session.StartAsync(Consent.TranscribeOnly, "x");
         await Assert.ThrowsAsync<InvalidOperationException>(() => session.StartAsync(Consent.TranscribeOnly, "y"));
         await session.StopAsync();
+    }
+
+    [Fact]
+    public async Task Si_falla_el_segundo_grabador_cierra_los_recursos_previos_y_la_reunion()
+    {
+        var (s, r, st) = (new Sources(), new Recorders(failLoopback: true), new MemoryStore());
+        var session = Make(s, r, st);
+        await Assert.ThrowsAsync<IOException>(() => session.StartAsync(Consent.RecordAndTranscribe, "x"));
+        Assert.Equal(2, s.Disposed);
+        Assert.Equal(1, r.Disposed);
+        Assert.True(st.Ended);
+        Assert.False(session.IsRunning);
     }
 }

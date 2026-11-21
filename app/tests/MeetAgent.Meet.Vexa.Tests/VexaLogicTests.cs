@@ -20,6 +20,8 @@ public class MeetLinkTests
     [InlineData("https://zoom.us/j/123456")]
     [InlineData("hola")]
     [InlineData("https://meet.google.com/")]
+    [InlineData("https://example.org/meet.google.com/abc-defg-hij")]
+    [InlineData("https://meet.google.com/?x=/abc-defg-hij")]
     [InlineData("abc-defg")]
     public void Rechaza_lo_que_no_es_un_Meet(string input)
     {

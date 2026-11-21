@@ -13,6 +13,7 @@ public sealed class BotMeetingSession(IVexaApi api, ITranscriptStore store, stri
     string language = "es", string? selfName = null, TimeSpan? pollInterval = null)
 {
     private readonly TimeSpan _poll = pollInterval ?? TimeSpan.FromSeconds(3);
+    private readonly SemaphoreSlim _lifecycle = new(1, 1);
     private CancellationTokenSource? _cts;
     private Task _completion = Task.CompletedTask;
     private string? _code;
@@ -27,19 +28,32 @@ public sealed class BotMeetingSession(IVexaApi api, ITranscriptStore store, stri
     /// <returns>Id de la reunión en el store.</returns>
     public async Task<long> StartAsync(string meetLinkOrCode, string title, CancellationToken ct)
     {
-        if (IsRunning) throw new InvalidOperationException("Ya hay un bot en una reunión.");
         if (!MeetLink.TryParse(meetLinkOrCode, out var code))
             throw new ArgumentException($"«{meetLinkOrCode}» no es un link de Google Meet (meet.google.com/abc-defg-hij).");
 
-        await api.StartBotAsync(code, botName, language, ct);
-        _code = code;
-        var startedAt = DateTimeOffset.Now;
-        _meetingId = store.StartMeeting(title, startedAt, "bot-transcribir");
-        Log?.Invoke($"Bot «{botName}» pedido para {MeetLink.Url(code)}");
-        _cts = new CancellationTokenSource();
-        var sync = new TranscriptSync(selfName, startedAt);
-        _completion = Task.Run(() => LoopAsync(code, sync, _cts.Token), CancellationToken.None);
-        return _meetingId;
+        await _lifecycle.WaitAsync(ct);
+        try
+        {
+            if (IsRunning) throw new InvalidOperationException("Ya hay un bot en una reunión.");
+            _cts?.Dispose();
+            _cts = null;
+            await api.StartBotAsync(code, botName, language, ct);
+            var startedAt = DateTimeOffset.Now;
+            try { _meetingId = store.StartMeeting(title, startedAt, "bot-transcribir"); }
+            catch
+            {
+                await RemoveBotAsync(code);
+                throw;
+            }
+            _code = code;
+            _cts = new CancellationTokenSource();
+            var token = _cts.Token;
+            var sync = new TranscriptSync(selfName, startedAt);
+            Log?.Invoke($"Bot «{botName}» pedido para {MeetLink.Url(code)}");
+            _completion = Task.Run(() => LoopAsync(code, sync, token), CancellationToken.None);
+            return _meetingId;
+        }
+        finally { _lifecycle.Release(); }
     }
 
     private async Task LoopAsync(string code, TranscriptSync sync, CancellationToken ct)
@@ -90,11 +104,26 @@ public sealed class BotMeetingSession(IVexaApi api, ITranscriptStore store, stri
     /// <summary>Saca al bot del Meet y espera a que se guarde lo último.</summary>
     public async Task StopAsync()
     {
-        if (_code is null || !IsRunning) return;
-        try { await api.StopBotAsync(_code, CancellationToken.None); }
+        await _lifecycle.WaitAsync();
+        try
+        {
+            if (_code is null || !IsRunning) return;
+            await RemoveBotAsync(_code);
+            _cts?.Cancel();
+            try { await _completion; }
+            finally
+            {
+                _cts?.Dispose();
+                _cts = null;
+            }
+        }
+        finally { _lifecycle.Release(); }
+    }
+
+    private async Task RemoveBotAsync(string code)
+    {
+        try { await api.StopBotAsync(code, CancellationToken.None); }
         catch (Exception ex) { Log?.Invoke($"No se pudo sacar al bot: {ex.Message}"); }
-        _cts?.Cancel();
-        await _completion;
     }
 
     private string Describe(string status) => status switch

@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using MeetAgent.Core;
+using MeetAgent.Core.Export;
 using MeetAgent.NativeHost;
 using MeetAgent.Storage.Sqlite;
 
@@ -113,6 +114,100 @@ public class CaptionHostTests
         f.Host.CloseAll();
         Assert.NotNull(f.Store.GetMeeting(id)!.EndedAt);
     }
+
+    [Theory]
+    [InlineData("-1")]
+    [InlineData("1e500")]
+    [InlineData("1e40")]
+    public void Una_marca_invalida_responde_con_error_y_conserva_el_rid(string start)
+    {
+        using var f = new HostFixture();
+        var id = f.Send("""{"type":"start"}""").GetProperty("meetingId").GetInt64();
+        var result = f.Send($$"""{"type":"segment","meetingId":{{id}},"start":{{start}},"text":"hola","rid":5}""");
+        Assert.False(result.GetProperty("ok").GetBoolean());
+        Assert.Equal(5, result.GetProperty("rid").GetInt32());
+        Assert.Empty(f.Store.GetSegments(id));
+    }
+
+    [Fact]
+    public void Pagina_la_transcripcion_y_exporta_todo_el_markdown_de_mas_de_un_mib()
+    {
+        using var f = new HostFixture();
+        var id = f.Store.StartMeeting("larga", DateTimeOffset.Now, "subtitulos");
+        var text = string.Concat(Enumerable.Repeat("á🚀", 180_000));
+        f.Store.AddSegment(id, new TranscriptSegment(Speaker.Otros, TimeSpan.Zero, TimeSpan.Zero, text));
+        f.Store.AddSegment(id, new TranscriptSegment(Speaker.Yo, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(3), "Último"));
+        var expectedMd = MarkdownExporter.Export(f.Store.GetMeeting(id)!, f.Store.GetSegments(id));
+        Assert.True(Encoding.UTF8.GetByteCount(expectedMd) > NativeMessaging.MaxMessageBytes);
+        var reconstructed = new Dictionary<long, StringBuilder>();
+        long afterId = 0;
+        int textOffset = 0, getPages = 0;
+        while (true)
+        {
+            var response = f.Host.Handle($$"""{"type":"get","meetingId":{{id}},"afterId":{{afterId}},"textOffset":{{textOffset}},"rid":17}""");
+            Assert.InRange(Encoding.UTF8.GetByteCount(response), 1, NativeMessaging.MaxMessageBytes);
+            using var json = JsonDocument.Parse(response);
+            var page = json.RootElement;
+            Assert.True(page.GetProperty("ok").GetBoolean());
+            Assert.Equal(17, page.GetProperty("rid").GetInt32());
+            foreach (var part in page.GetProperty("segments").EnumerateArray())
+            {
+                var segment = part.GetProperty("id").GetInt64();
+                if (!reconstructed.ContainsKey(segment)) reconstructed[segment] = new StringBuilder();
+                reconstructed[segment].Append(part.GetProperty("text").GetString());
+            }
+            Assert.True(++getPages < 100);
+            if (!page.GetProperty("more").GetBoolean()) break;
+            var cursor = page.GetProperty("next");
+            (afterId, textOffset) = (cursor.GetProperty("afterId").GetInt64(), cursor.GetProperty("textOffset").GetInt32());
+        }
+        Assert.True(getPages > 1);
+        Assert.Equal([text, "Último"], reconstructed.Values.Select(x => x.ToString()));
+
+        var export = new StringBuilder();
+        int? offset = 0;
+        string? exportId = null;
+        var exportPages = 0;
+        do
+        {
+            var response = f.Host.Handle(JsonSerializer.Serialize(new { type = "export", meetingId = id, exportId, offset }));
+            Assert.InRange(Encoding.UTF8.GetByteCount(response), 1, NativeMessaging.MaxMessageBytes);
+            using var json = JsonDocument.Parse(response);
+            var page = json.RootElement;
+            Assert.True(page.GetProperty("ok").GetBoolean());
+            export.Append(page.GetProperty("markdown").GetString());
+            exportId = page.GetProperty("exportId").GetString();
+            offset = page.GetProperty("nextOffset").ValueKind == JsonValueKind.Null ? null : page.GetProperty("nextOffset").GetInt32();
+            Assert.True(++exportPages < 100);
+        } while (offset is not null);
+        Assert.True(exportPages > 1);
+        Assert.Equal(expectedMd, export.ToString());
+    }
+
+    [Fact]
+    public void Reenvio_en_otro_puerto_deduplica_y_conserva_la_revision_mas_reciente()
+    {
+        using var f = new HostFixture();
+        var started = f.Send("""{"type":"start"}""");
+        var meetingId = started.GetProperty("meetingId").GetInt64();
+        var captureId = started.GetProperty("captureId").GetString();
+        f.Host.CloseAll();
+        var reconnect = new CaptionHost(f.Store);
+        void Deliver(string? capture, long revision, string text, bool ok = true)
+        {
+            using var response = JsonDocument.Parse(reconnect.Handle(JsonSerializer.Serialize(new
+                { type = "segment", meetingId, captureId = capture, eventId = "1", revision, text })));
+            Assert.Equal(ok, response.RootElement.GetProperty("ok").GetBoolean());
+        }
+        Deliver(new string('0', 32), 10, "Ajeno", false);
+        Deliver(captureId, 1, "Primera");
+        Deliver(captureId, 2, "Primera versión completa");
+        Deliver(captureId, 2, "Primera versión completa");
+        Deliver(captureId, 1, "Primera");
+        Assert.Equal("Primera versión completa", Assert.Single(f.Store.GetSegments(meetingId)).Text);
+        Assert.Single(f.Store.Search("completa"));
+        Assert.NotNull(f.Store.GetMeeting(meetingId)!.EndedAt);
+    }
 }
 
 public class CaptionHostReadTests
@@ -222,6 +317,63 @@ public class VoiceChannelTests
     {
         public string Name => "falsa";
         public (int SampleRate, short[] Samples) Synthesize(string text) => (16000, new short[1600]);
+    }
+
+    [Fact]
+    public void Solo_se_activa_la_voz_durante_una_reunion_abierta()
+    {
+        using var store = new SqliteTranscriptStore("Data Source=:memory:");
+        var host = new CaptionHost(store, speech: new FakeSpeech(), claimVoice: (_, _) => true);
+        const string voice = """{"type":"voice-on"}""";
+        Assert.False(JsonDocument.Parse(host.Handle(voice)).RootElement.GetProperty("ok").GetBoolean());
+        var id = JsonDocument.Parse(host.Handle("""{"type":"start"}""")).RootElement.GetProperty("meetingId").GetInt64();
+        Assert.True(JsonDocument.Parse(host.Handle($$"""{"type":"voice-on","meetingId":{{id}}}""")).RootElement.GetProperty("ok").GetBoolean());
+        Assert.Equal(id, host.VoiceMeetingId);
+        host.Handle($$"""{"type":"end","meetingId":{{id}}}""");
+        Assert.Null(host.VoiceMeetingId);
+    }
+
+    [Fact]
+    public async Task Solo_el_dueno_del_pipe_anuncia_voz_y_la_otra_reunion_puede_tomarla_al_cerrar()
+    {
+        using var store = new SqliteTranscriptStore("Data Source=:memory:");
+        var pipe = $"meetagent-voice-test-{Guid.NewGuid():N}";
+        var pushed = new List<string>();
+        VoiceChannel? channel = null;
+        bool Claim(CaptionHost host, long id)
+        {
+            try
+            {
+                channel = VoiceChannel.Start(pipe, host, json => { pushed.Add(json); return Task.CompletedTask; }, id);
+                return true;
+            }
+            catch (IOException) { return false; }
+        }
+        var a = new CaptionHost(store, speech: new FakeSpeech(), claimVoice: Claim);
+        var b = new CaptionHost(store, speech: new FakeSpeech(), claimVoice: Claim);
+        static JsonElement Request(CaptionHost host, string json)
+        {
+            using var doc = JsonDocument.Parse(host.Handle(json));
+            return doc.RootElement.Clone();
+        }
+        var first = Request(a, """{"type":"start"}""").GetProperty("meetingId").GetInt64();
+        var second = Request(b, """{"type":"start"}""").GetProperty("meetingId").GetInt64();
+        try
+        {
+            Assert.True(Request(a, $$"""{"type":"voice-on","meetingId":{{first}}}""").GetProperty("ok").GetBoolean());
+            var busy = Request(b, $$"""{"type":"voice-on","meetingId":{{second}}}""");
+            Assert.False(busy.GetProperty("ok").GetBoolean());
+            Assert.True(busy.GetProperty("busy").GetBoolean());
+            a.CloseAll();
+            await channel!.DisposeAsync();
+            channel = null;
+            Assert.True(Request(b, $$"""{"type":"voice-on","meetingId":{{second}}}""").GetProperty("ok").GetBoolean());
+            var said = await VoiceChannel.SayAsync("Hola", TimeSpan.FromSeconds(5), pipe);
+            Assert.True(said!.Value.GetProperty("ok").GetBoolean());
+            using var msg = JsonDocument.Parse(Assert.Single(pushed));
+            Assert.Equal(second, msg.RootElement.GetProperty("meetingId").GetInt64());
+        }
+        finally { if (channel is not null) await channel.DisposeAsync(); }
     }
 
     [Fact]

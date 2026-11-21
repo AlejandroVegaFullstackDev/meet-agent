@@ -135,4 +135,19 @@ public class SttServerTests
         Assert.Equal(HttpStatusCode.BadRequest, (await s.Http.PostAsync("/v1/audio/transcriptions", noFile)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await s.Http.PostAsync("/v1/audio/transcriptions", VexaForm("no es un wav"u8.ToArray()))).StatusCode);
     }
+
+    [Fact]
+    public async Task Wav_truncado_y_multipart_incompleto_responden_400()
+    {
+        await using var s = new Server();
+        using var truncated = VexaForm(Wav(16000, 1, 1)[..^1]);
+        using var dataResponse = await s.Http.PostAsync("/v1/audio/transcriptions", truncated);
+        Assert.Equal(HttpStatusCode.BadRequest, dataResponse.StatusCode);
+
+        using var multipart = new StringContent("");
+        multipart.Headers.ContentType = new MediaTypeHeaderValue("multipart/form-data");
+        using var formResponse = await s.Http.PostAsync("/v1/audio/transcriptions", multipart);
+        Assert.Equal(HttpStatusCode.BadRequest, formResponse.StatusCode);
+        Assert.Equal(0, s.Transcriber.LastSampleCount);
+    }
 }

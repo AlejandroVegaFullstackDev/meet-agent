@@ -11,6 +11,7 @@
   const CAPTIONS_BUTTON_LABEL = /(activar|turn on|mostrar|show).*(subt[ií]tulo|caption)/i;
   const CHAT_BUTTON_LABEL = /chat|mensajes|messages/i;
   const SEND_BUTTON_LABEL = /^(enviar|send)/i;
+  const LEAVE_BUTTON_LABEL = /^(leave call|leave (the )?meeting|salir de la llamada|salir de la reuni[oó]n|finalizar (la )?llamada|colgar)(?:$|\s|[.(])/i;
 
   // Clases conocidas (2024-2026). Solo se usan si existen; si no, se usa la heurística por texto.
   const KNOWN = {
@@ -79,15 +80,19 @@
     return null;
   }
 
+  function isLeaveButton(button) {
+    return LEAVE_BUTTON_LABEL.test(button?.getAttribute('aria-label') || '');
+  }
+
   /** Nombre del usuario en la reunión (Meet lo marca con data-self-name en su propio recuadro). */
   function selfName(doc = document) {
     const el = doc.querySelector('[data-self-name]');
     return el ? clean(el.getAttribute('data-self-name')) || null : null;
   }
 
-  /** Código abc-defg-hij de la URL, o null si no estamos dentro de una reunión. */
+  /** Código abc-defg-hij de la URL (/abc-defg-hij o con prefijo, p. ej. /meet/abc-defg-hij), o null si no estamos en una reunión. */
   function meetCode(loc = location) {
-    const m = /^\/([a-z]{3}-[a-z]{4}-[a-z]{3})(?:$|[/?#])/i.exec(loc.pathname);
+    const m = /(?:^|\/)([a-z]{3}-[a-z]{4}-[a-z]{3})(?:$|[/?#])/i.exec(loc.pathname);
     return m ? m[1].toLowerCase() : null;
   }
 
@@ -142,6 +147,6 @@
   const clean = (s) => (s || '').replace(/\s+/g, ' ').trim();
 
   root.MeetAgent = Object.assign(root.MeetAgent || {}, {
-    selectors: { captionRegion, captionBlocks, captionsButton, selfName, meetCode, chatButton, chatInput, sendButton, describe, diagnose },
+    selectors: { captionRegion, captionBlocks, captionsButton, isLeaveButton, selfName, meetCode, chatButton, chatInput, sendButton, describe, diagnose },
   });
 })(globalThis);

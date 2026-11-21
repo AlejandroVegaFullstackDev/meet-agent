@@ -1,9 +1,3 @@
-using System.Diagnostics;
-using System.Formats.Tar;
-using System.IO.Compression;
-using System.Net;
-using System.Net.Http;
-using System.Text;
 using MeetAgent.Ai;
 
 namespace MeetAgent.Ai.Tests;
@@ -16,9 +10,8 @@ public class AccountConnectorTests
         public void Report(string value) => Values.Add(value);
     }
 
-    private static AccountConnector Connector(FakeRunner runner, Func<string, string?> find,
-        Func<AiProvider, Task<bool>>? confirm = null, AccountInstaller? installer = null) =>
-        new(find, runner.RunAsync, installer, confirm,
+    private static AccountConnector Connector(FakeRunner runner, Func<string, string?> find) =>
+        new(find, runner.RunAsync,
             pollInterval: TimeSpan.FromMilliseconds(1), loginTimeout: TimeSpan.FromSeconds(2));
 
     [Fact]
@@ -60,166 +53,45 @@ public class AccountConnectorTests
     }
 
     [Fact]
-    public async Task Sin_instalar_pide_permiso_instala_y_despues_conecta()
-    {
-        var installed = false;
-        var loggedIn = false;
-        var asked = false;
-        using var runner = new FakeRunner((info, _) =>
-        {
-            var args = info.ArgumentList.ToList();
-            if (info.FileName.EndsWith("powershell.exe", StringComparison.OrdinalIgnoreCase) || info.FileName == "bash")
-            {
-                installed = true;
-                return (0, "");
-            }
-            if (args.SequenceEqual(["auth", "status", "--json"]))
-                return (0, $$"""{"loggedIn":{{(loggedIn ? "true" : "false")}}}""");
-            if (args.SequenceEqual(["auth", "login", "--help"])) return (0, "login");
-            if (args.SequenceEqual(["auth", "login"])) { loggedIn = true; return (0, ""); }
-            return (1, "no esperado");
-        });
-        var installer = new AccountInstaller(run: runner.RunAsync, find: _ => null);
-
-        var result = await Connector(runner, name => installed && name == "claude" ? "claude" : null,
-            _ => { asked = true; return Task.FromResult(true); }, installer)
-            .ConnectAsync(AiProvider.ClaudeCuenta, null);
-
-        Assert.True(asked);
-        Assert.Equal(AccountConnectStatus.Connected, result.Status);
-        Assert.Contains(runner.Calls, c => c.Info.FileName.EndsWith("powershell.exe", StringComparison.OrdinalIgnoreCase)
-                                           || c.Info.FileName == "bash");
-    }
-
-    [Fact]
-    public async Task Sin_permiso_no_instala_nada()
+    public async Task Sin_el_programa_de_Claude_no_instala_nada_y_ofrece_openrouter_o_key()
     {
         using var runner = new FakeRunner((_, _) => (1, "no se debe llamar"));
 
-        var result = await Connector(runner, _ => null, _ => Task.FromResult(false))
-            .ConnectAsync(AiProvider.ChatGptCuenta, null);
+        var result = await Connector(runner, _ => null).ConnectAsync(AiProvider.ClaudeCuenta, null);
 
-        Assert.Equal(AccountConnectStatus.Cancelled, result.Status);
+        Assert.Equal(AccountConnectStatus.Failed, result.Status);
+        Assert.True(result.OffersApiKey);
+        Assert.Contains("OpenRouter", result.Message);
         Assert.Empty(runner.Calls);
     }
 
     [Fact]
-    public async Task Si_falla_la_instalacion_ofrece_la_api_key()
+    public async Task Google_sin_su_programa_pasa_a_la_key_gratis()
     {
-        using var runner = new FakeRunner((_, _) => (1, "sin conexión"));
-        var installer = new AccountInstaller(run: runner.RunAsync, find: _ => null);
+        using var runner = new FakeRunner((_, _) => (1, "no se debe llamar"));
 
-        var result = await Connector(runner, _ => null, _ => Task.FromResult(true), installer)
-            .ConnectAsync(AiProvider.ClaudeCuenta, null);
-
-        Assert.Equal(AccountConnectStatus.Failed, result.Status);
-        Assert.True(result.OffersApiKey);
-        Assert.Contains("API key", result.Message);
-    }
-
-    [Fact]
-    public async Task Gemini_sin_Node_pasa_a_la_key()
-    {
-        using var runner = new FakeRunner((info, _) =>
-            info.ArgumentList.Contains("--version") ? (1, "no hay node") : (1, "no esperado"));
-        var installer = new AccountInstaller(run: runner.RunAsync, find: name => name == "node" ? "node" : null);
-
-        var result = await Connector(runner, _ => null, _ => Task.FromResult(true), installer)
-            .ConnectAsync(AiProvider.GeminiCuenta, null);
+        var result = await Connector(runner, _ => null).ConnectAsync(AiProvider.GeminiCuenta, null);
 
         Assert.Equal(AccountConnectStatus.NeedsKey, result.Status);
-        Assert.True(result.OffersApiKey);
-        Assert.Contains("API key", result.Message);
-    }
-}
-
-public class AccountInstallerTests
-{
-    private sealed class InstallerHttp(Func<HttpRequestMessage, HttpResponseMessage> answer) : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
-            Task.FromResult(answer(request));
+        Assert.Contains("key", result.Message);
+        Assert.Empty(runner.Calls);
     }
 
     [Fact]
-    public void El_asset_de_Codex_es_el_nombre_real_de_la_release()
+    public async Task Si_el_login_termina_sin_sesion_no_espera_los_cinco_minutos()
     {
-        var asset = AccountInstaller.CodexAssetName();
-        Assert.NotNull(asset);
-        Assert.StartsWith("codex-", asset);
-        Assert.Contains(OperatingSystem.IsWindows() ? "windows-msvc" : OperatingSystem.IsMacOS() ? "apple-darwin" : "linux-musl", asset);
-    }
-
-    [Fact]
-    public async Task Codex_se_descarga_de_la_release_y_queda_en_tools()
-    {
-        if (AccountInstaller.CodexAssetName() is not { } asset)
+        using var runner = new FakeRunner((info, _) =>
         {
-            Assert.Fail("Este sistema no tiene un binario de ChatGPT.");
-            return;
-        }
+            var args = info.ArgumentList.ToList();
+            if (args.SequenceEqual(["auth", "status", "--json"])) return (0, """{"loggedIn":false}""");
+            if (args.SequenceEqual(["auth", "login", "--help"])) return (0, "login");
+            return (1, "cancelado");
+        });
+        var connector = new AccountConnector(_ => "claude", runner.RunAsync,
+            pollInterval: TimeSpan.FromMilliseconds(1), loginTimeout: TimeSpan.FromMinutes(5));
 
-        var binary = Encoding.UTF8.GetBytes("programa de ChatGPT");
-        var payload = asset.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) ? TarGz(binary) : binary;
-        var json = $$"""{"assets":[{"name":"{{asset}}","browser_download_url":"https://example.test/{{asset}}"}]}""";
-        using var http = new HttpClient(new InstallerHttp(request =>
-            request.RequestUri!.Host == "api.github.com"
-                ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") }
-                : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(payload) }));
-        var tools = Directory.CreateTempSubdirectory("meetagent-codex-").FullName;
-        try
-        {
-            var installer = new AccountInstaller(http: http, toolsDir: tools);
+        var result = await connector.ConnectAsync(AiProvider.ClaudeCuenta, null).WaitAsync(TimeSpan.FromSeconds(20));
 
-            var result = await installer.InstallAsync(AiProvider.ChatGptCuenta, null);
-
-            Assert.Equal(AccountInstallStatus.Installed, result.Status);
-            var file = Path.Combine(tools, OperatingSystem.IsWindows() ? "codex.exe" : "codex");
-            Assert.True(File.Exists(file));
-            Assert.False(File.Exists(Path.Combine(tools, "codex.download")));
-            Assert.Equal(binary, await File.ReadAllBytesAsync(file));
-        }
-        finally { Directory.Delete(tools, true); }
-    }
-
-    [Fact]
-    public async Task Sin_Node_Gemini_pide_una_key()
-    {
-        using var runner = new FakeRunner((_, _) => (1, "no hay node"));
-        var installer = new AccountInstaller(run: runner.RunAsync, find: name => name == "node" ? "node" : null);
-
-        var result = await installer.InstallAsync(AiProvider.GeminiCuenta, null);
-
-        Assert.Equal(AccountInstallStatus.NeedsKey, result.Status);
-        Assert.Contains("API key", result.Message);
-    }
-
-    [Fact]
-    public async Task Claude_usa_su_instalador_oficial_sin_ventana()
-    {
-        ProcessStartInfo? install = null;
-        using var runner = new FakeRunner((info, _) => { install = info; return (0, ""); });
-        var installer = new AccountInstaller(run: runner.RunAsync, find: _ => null);
-
-        var result = await installer.InstallAsync(AiProvider.ClaudeCuenta, null);
-
-        Assert.Equal(AccountInstallStatus.Installed, result.Status);
-        Assert.NotNull(install);
-        Assert.True(install!.CreateNoWindow);
-        Assert.Contains(install.ArgumentList, a => a.Contains("claude.ai/install", StringComparison.Ordinal));
-    }
-
-    private static byte[] TarGz(byte[] content)
-    {
-        using var memory = new MemoryStream();
-        using (var gzip = new GZipStream(memory, CompressionLevel.SmallestSize, leaveOpen: true))
-        using (var tar = new TarWriter(gzip, leaveOpen: true))
-        {
-            tar.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, "codex")
-            {
-                DataStream = new MemoryStream(content),
-            });
-        }
-        return memory.ToArray();
+        Assert.Equal(AccountConnectStatus.Failed, result.Status);
     }
 }

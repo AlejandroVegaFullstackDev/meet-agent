@@ -100,6 +100,54 @@ public class MainViewModelTests
         Assert.Empty(store.Consents);
     }
 
+    [AvaloniaFact]
+    public async Task Con_el_dialogo_abierto_ni_la_bandeja_ni_un_agente_abren_otro()
+    {
+        var (store, rec) = (new Fakes.Store(), new Fakes.Recorders());
+        var answer = new TaskCompletionSource<Consent>();
+        int asked = 0;
+        var vm = new MainViewModel(Fakes.Session(store, rec, seconds: 30), "falso",
+            () => { asked++; return answer.Task; }, ui: a => Dispatcher.UIThread.Post(a));
+
+        var first = vm.ToggleCommand.ExecuteAsync(null);
+        Assert.True(vm.IsBusy);
+        vm.ToggleCommand.Execute(null);                // la bandeja no mira CanExecute
+        var agent = await vm.StartFromAgentAsync("otra");
+
+        Assert.Equal(1, asked);
+        Assert.True(agent.AlreadyRunning);
+
+        answer.SetResult(Consent.TranscribeOnly);
+        await first;
+        Assert.True(vm.IsRunning);
+        Assert.Equal(["transcribir"], store.Consents);
+        await vm.ToggleCommand.ExecuteAsync(null);
+    }
+
+    [AvaloniaFact]
+    public async Task Elegir_despues_de_que_vence_la_peticion_del_agente_no_inicia_la_reunion()
+    {
+        var (store, rec) = (new Fakes.Store(), new Fakes.Recorders());
+        var answer = new TaskCompletionSource<Consent>();
+        CancellationToken seen = default;
+        var vm = new MainViewModel(Fakes.Session(store, rec, seconds: 30), "falso",
+            ct => { seen = ct; return answer.Task; }, ui: a => Dispatcher.UIThread.Post(a));
+
+        var start = vm.StartFromAgentAsync("Daily", TimeSpan.FromMilliseconds(50));
+        await WaitUntil(() => seen.IsCancellationRequested);   // el diálogo recibe la orden de cerrarse
+        answer.SetResult(Consent.RecordAndTranscribe);         // el usuario elige tarde
+        var r = await start;
+
+        Assert.True(r.TimedOut);
+        Assert.Equal(Consent.None, r.Consent);
+        Assert.Null(r.MeetingId);
+        Assert.False(vm.IsRunning);
+        Assert.False(vm.IsBusy);
+        Assert.Empty(store.Consents);
+        Assert.Equal(0, rec.Opened);
+        Assert.Contains("tiempo", vm.LastLog);
+    }
+
     internal static async Task WaitUntil(Func<bool> condition, int timeoutMs = 10000)
     {
         var until = DateTime.UtcNow.AddMilliseconds(timeoutMs);
@@ -126,6 +174,24 @@ public class ConsentDialogTests
         var result = await task;
         owner.Close();
         return result ?? Consent.None;
+    }
+
+    [AvaloniaFact]
+    public async Task Al_vencer_el_plazo_el_dialogo_se_cierra_como_Nada()
+    {
+        var owner = new Window();
+        owner.Show();
+        using var deadline = new CancellationTokenSource();
+        var task = ConsentDialog.AskAsync(owner, deadline.Token);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(owner.OwnedWindows, w => w is ConsentDialog);
+
+        deadline.Cancel();
+        await MainViewModelTests.WaitUntil(() => task.IsCompleted);
+
+        Assert.Equal(Consent.None, await task);
+        Assert.DoesNotContain(owner.OwnedWindows, w => w is ConsentDialog);
+        owner.Close();
     }
 
     private static void Click(ConsentDialog d, string name) =>

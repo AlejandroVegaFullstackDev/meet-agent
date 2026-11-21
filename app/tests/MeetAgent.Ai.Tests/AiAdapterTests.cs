@@ -65,7 +65,32 @@ public class OpenAiCompatibleChatTests
         var chat = new OpenAiCompatibleChat(new HttpClient(http), "https://api.openai.com/v1", "mala", "gpt-5-mini", "OpenAI");
 
         var ex = await Assert.ThrowsAsync<AiException>(() => chat.CompleteAsync("r", "u", null, CancellationToken.None));
-        Assert.Equal("OpenAI respondió 401: Invalid API key", ex.Message);
+        Assert.Equal("OpenAI rechazó la API key. Revisa que esté bien copiada y activa. (401: Invalid API key)", ex.Message);
+    }
+
+    [Fact]
+    public async Task Sin_saldo_lo_dice_y_el_error_de_gemini_en_arreglo_se_entiende()
+    {
+        var sinSaldo = new FakeHttp((HttpStatusCode.PaymentRequired, """{"error":{"message":"Insufficient Balance"}}"""));
+        var deepseek = new OpenAiCompatibleChat(new HttpClient(sinSaldo), "https://api.deepseek.com/v1", "k", "deepseek-chat", "DeepSeek");
+        var ex = await Assert.ThrowsAsync<AiException>(() => deepseek.CompleteAsync("r", "u", null, CancellationToken.None));
+        Assert.StartsWith("Tu cuenta de DeepSeek no tiene saldo.", ex.Message);
+
+        var keyMala = new FakeHttp((HttpStatusCode.BadRequest, """[{"error":{"code":400,"message":"API key not valid. Please pass a valid API key."}}]"""));
+        var gemini = new OpenAiCompatibleChat(new HttpClient(keyMala), "https://generativelanguage.googleapis.com/v1beta/openai", "k", "gemini-flash-latest", "Gemini");
+        ex = await Assert.ThrowsAsync<AiException>(() => gemini.CompleteAsync("r", "u", null, CancellationToken.None));
+        Assert.Equal("Gemini rechazó la API key. Revisa que esté bien copiada y activa. (400: API key not valid. Please pass a valid API key.)", ex.Message);
+    }
+
+    [Fact]
+    public async Task Un_200_con_HTML_da_un_mensaje_claro()
+    {
+        var http = new FakeHttp((HttpStatusCode.OK, "<html>proxy</html>"));
+        var chat = new OpenAiCompatibleChat(new HttpClient(http), "http://localhost:1234/v1", null, "qwen3", "Tu modelo");
+
+        var ex = await Assert.ThrowsAsync<AiException>(() => chat.CompleteAsync("r", "u", null, CancellationToken.None));
+
+        Assert.Contains("no se entiende", ex.Message);
     }
 }
 
@@ -134,6 +159,24 @@ public class SettingsAndLoginTests
         Assert.Equal(s, back);
         if (OperatingSystem.IsWindows()) Assert.DoesNotContain("sk-secreta", File.ReadAllText(path));
         File.Delete(path);
+    }
+
+    [Fact]
+    public void Guardar_es_atomico_y_en_Linux_nace_solo_para_el_usuario()
+    {
+        var dir = Directory.CreateTempSubdirectory("meetagent-ia-").FullName;
+        var path = Path.Combine(dir, "ia.json");
+        var store = new AiSettingsStore(path);
+        File.WriteAllText(path + ".tmp", "basura de un guardado anterior cortado");
+
+        store.Save(new AiSettings(new Connection(AiProvider.DeepSeek, "deepseek-chat", "sk-1")));
+        store.Save(new AiSettings(new Connection(AiProvider.DeepSeek, "deepseek-chat", "sk-2")));
+
+        Assert.Equal("sk-2", store.Load().Chat!.ApiKey);
+        Assert.Equal(["ia.json"], Directory.GetFiles(dir).Select(Path.GetFileName));
+        if (!OperatingSystem.IsWindows())
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
+        Directory.Delete(dir, true);
     }
 
     [Fact]

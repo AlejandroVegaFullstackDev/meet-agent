@@ -32,27 +32,31 @@ public static class MeetCommand
         session.Log += Log.Info;
         session.SegmentReceived += s => Console.WriteLine($"[{TimeFormat.Hms(s.Start)}] [{s.Label}] {s.Text}");
 
-        var stopping = false;
-        Console.CancelKeyPress += (_, e) =>
+        var stop = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnCancel(object? sender, ConsoleCancelEventArgs e)
         {
             e.Cancel = true;
-            if (stopping) return;
-            stopping = true;
-            Log.Info("Sacando al bot…");
-            _ = session.StopAsync();
-        };
+            stop.TrySetResult();
+        }
+        Console.CancelKeyPress += OnCancel;
 
         try
         {
             var id = await session.StartAsync(url, args.Get("title", $"Meet {DateTime.Now:yyyy-MM-dd HH:mm}"), CancellationToken.None);
             Log.Info($"Reunión #{id}. Ctrl+C para sacar al bot.");
+            if (await Task.WhenAny(session.Completion, stop.Task) == stop.Task)
+            {
+                Log.Info("Sacando al bot…");
+                await session.StopAsync();
+            }
+            await session.Completion;
+            return 0;
         }
         catch (Exception ex) when (ex is VexaException or HttpRequestException or ArgumentException)
         {
             Console.Error.WriteLine(ex is HttpRequestException ? $"Vexa no responde en {config.BaseUrl} ({ex.Message}). ¿Corriste deploy/vexa/up.sh?" : ex.Message);
             return 2;
         }
-        await session.Completion;
-        return 0;
+        finally { Console.CancelKeyPress -= OnCancel; }
     }
 }

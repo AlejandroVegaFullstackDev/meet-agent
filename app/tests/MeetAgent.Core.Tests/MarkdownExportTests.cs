@@ -45,8 +45,21 @@ public class MarkdownExportTests
             new(Speaker.Otros, TimeSpan.FromSeconds(2.5), TimeSpan.FromSeconds(4), "Buenas.", "Ana Gómez"),
             new(Speaker.Otros, TimeSpan.FromSeconds(4.5), TimeSpan.FromSeconds(6), "Sigamos.", "Ana Gómez"),
         ]);
-        Assert.Contains("**[00:00:00] Juan Pérez:** Hola.", md);
-        Assert.Contains("**[00:00:02] Ana Gómez:** Buenas. Sigamos.", md);
+        Assert.Contains("**[00:00:00] Otros:** Juan Pérez: Hola.", md);
+        Assert.Contains("**[00:00:02] Otros:** Ana Gómez: Buenas. Sigamos.", md);
+    }
+
+    [Fact]
+    public void Respeta_el_orden_de_entrada_en_empates_y_conserva_el_fin_del_solape()
+    {
+        var md = MarkdownExporter.Export(M,
+        [
+            S(Speaker.Otros, 0, 1, "Primero."),
+            S(Speaker.Yo, 0, 10, "Segundo."),
+            S(Speaker.Yo, 1, 2, "Tercero."),
+            S(Speaker.Yo, 9, 10, "Cuarto.\nFin."),
+        ]);
+        Assert.Contains("**[00:00:00] Otros:** Primero.\n\n**[00:00:00] Yo:** Segundo. Tercero. Cuarto. Fin.", md);
     }
 
     [Fact]

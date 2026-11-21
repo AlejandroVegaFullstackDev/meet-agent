@@ -56,23 +56,58 @@ public static class OpenRouterLogin
         }
     }
 
-    /// <summary>Atiende peticiones a localhost hasta que llegue una con <c>?code=</c> (el navegador también pide /favicon.ico).</summary>
-    private static async Task<string> WaitForCodeAsync(TcpListener listener, CancellationToken ct)
+    /// <summary>
+    /// Atiende peticiones a localhost hasta que llegue una con <c>?code=</c> (el navegador también pide /favicon.ico).
+    /// Si OpenRouter vuelve con <c>?error=</c>, la página dice que no se conectó y se deja de esperar.
+    /// </summary>
+    internal static async Task<string> WaitForCodeAsync(TcpListener listener, CancellationToken ct)
     {
         while (true)
         {
             using var client = await listener.AcceptTcpClientAsync(ct).ConfigureAwait(false);
             using var stream = client.GetStream();
             using var reader = new StreamReader(stream, Encoding.ASCII, leaveOpen: true);
-            var requestLine = await reader.ReadLineAsync(ct).ConfigureAwait(false) ?? "";
+            // Una conexión de reserva del navegador que no envía nada no debe bloquear la del callback.
+            using var read = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            read.CancelAfter(TimeSpan.FromSeconds(3));
+            string requestLine;
+            try
+            {
+                requestLine = await reader.ReadLineAsync(read.Token).ConfigureAwait(false) ?? "";
+                // Se leen las cabeceras: cerrar con datos sin leer manda un RST y el navegador no mostraría la página.
+                while (await reader.ReadLineAsync(read.Token).ConfigureAwait(false) is { Length: > 0 }) { }
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or IOException && !ct.IsCancellationRequested)
+            {
+                continue;
+            }
             var code = CodeFrom(requestLine);
-            var html = code is null ? "" : "<!doctype html><meta charset=utf-8><title>MeetAgent</title><p style='font:16px sans-serif'>Listo: MeetAgent ya está conectado a OpenRouter. Puedes cerrar esta pestaña.";
+            var error = ErrorFrom(requestLine);
+            var answered = code is not null || error is not null;
+            var html = answered ? CallbackPage.Html("OpenRouter", code, error) : "";
             var bytes = Encoding.UTF8.GetBytes(html);
-            var head = $"HTTP/1.1 {(code is null ? "404 Not Found" : "200 OK")}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {bytes.Length}\r\nConnection: close\r\n\r\n";
+            var head = $"HTTP/1.1 {(answered ? "200 OK" : "404 Not Found")}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {bytes.Length}\r\nConnection: close\r\n\r\n";
             await stream.WriteAsync(Encoding.ASCII.GetBytes(head), ct).ConfigureAwait(false);
             await stream.WriteAsync(bytes, ct).ConfigureAwait(false);
             if (code is not null) return code;
+            if (error is not null)
+            {
+                throw new AiException(error == "access_denied"
+                    ? "Cancelaste el permiso en OpenRouter. Vuelve a intentarlo y acepta para conectar."
+                    : "OpenRouter no completó el inicio de sesión. Inténtalo de nuevo.");
+            }
         }
+    }
+
+    /// <summary>De <c>GET /?error=access_denied HTTP/1.1</c> saca <c>access_denied</c>.</summary>
+    internal static string? ErrorFrom(string requestLine)
+    {
+        var parts = requestLine.Split(' ');
+        if (parts.Length < 2) return null;
+        var q = parts[1].IndexOf('?');
+        if (q < 0) return null;
+        var error = HttpUtility.ParseQueryString(parts[1][(q + 1)..])["error"];
+        return string.IsNullOrWhiteSpace(error) ? null : error;
     }
 
     /// <summary>De <c>GET /?code=abc HTTP/1.1</c> saca <c>abc</c>.</summary>

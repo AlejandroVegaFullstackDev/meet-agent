@@ -36,7 +36,12 @@ public sealed class WhisperTranscriber : ITranscriber
         var ctxLabel = adaptiveContext ? "adaptativo" : AudioContext == 0 ? "1500" : AudioContext.ToString();
         Name = $"{Path.GetFileNameWithoutExtension(modelPath)} ({threads} hilos, audio_ctx {ctxLabel})";
         _factory = WhisperFactory.FromPath(modelPath);
-        Processor(AudioContext);    // falla aquí (y no en la primera reunión) si el modelo o la nativa no cargan
+        try { Processor(AudioContext); } // falla antes de comenzar si el modelo o la nativa no cargan
+        catch
+        {
+            _factory.Dispose();
+            throw;
+        }
     }
 
     public string Name { get; }

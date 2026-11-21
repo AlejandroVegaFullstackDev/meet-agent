@@ -12,14 +12,14 @@ public static class MarkdownExporter
     public static string Export(Meeting meeting, IEnumerable<TranscriptSegment> segments)
     {
         var sb = new StringBuilder();
-        sb.Append("# ").Append(Escape(meeting.Title)).Append('\n').Append('\n');
+        sb.Append("# ").Append(EscapeLine(meeting.Title)).Append('\n').Append('\n');
         sb.Append("- Fecha: ").Append(meeting.StartedAt.ToString("yyyy-MM-dd HH:mm")).Append('\n');
         if (meeting.EndedAt is { } end)
             sb.Append("- Duración: ").Append(TimeFormat.Hms(end - meeting.StartedAt)).Append('\n');
-        sb.Append("- Consentimiento: ").Append(meeting.Consent).Append('\n');
+        sb.Append("- Consentimiento: ").Append(EscapeLine(meeting.Consent)).Append('\n');
         sb.Append('\n').Append("## Transcripción").Append('\n').Append('\n');
 
-        string? speaker = null;
+        (Speaker Kind, string Label)? speaker = null;
         TimeSpan lastEnd = TimeSpan.Zero;
         var paragraph = new StringBuilder();
         void FlushParagraph()
@@ -29,23 +29,27 @@ public static class MarkdownExporter
             paragraph.Clear();
         }
 
-        foreach (var s in segments.OrderBy(s => s.Start).ThenBy(s => s.Speaker))
+        foreach (var s in segments.OrderBy(s => s.Start))
         {
-            if (s.Label != speaker || s.Start - lastEnd > MaxGap)
+            var identity = (s.Speaker, s.Label);
+            if (identity != speaker || s.Start - lastEnd > MaxGap)
             {
                 FlushParagraph();
-                paragraph.Append($"**[{TimeFormat.Hms(s.Start)}] {EscapeName(s.Label)}:** ");
-                speaker = s.Label;
+                paragraph.Append($"**[{TimeFormat.Hms(s.Start)}] {s.Speaker}:** ");
+                if (s.Label != s.Speaker.ToString())
+                    paragraph.Append(EscapeLine(s.Label)).Append(": ");
+                speaker = identity;
+                lastEnd = s.End;
             }
             else paragraph.Append(' ');
-            paragraph.Append(Escape(s.Text.Trim()));
-            lastEnd = s.End;
+            paragraph.Append(EscapeLine(s.Text.Trim()));
+            if (s.End > lastEnd) lastEnd = s.End;
         }
         FlushParagraph();
         return sb.ToString();
     }
 
-    private static string EscapeName(string name) => Escape(name);
+    private static string EscapeLine(string text) => Escape(text.ReplaceLineEndings(" "));
 
     private static string Escape(string text)
     {

@@ -5,15 +5,17 @@
   'use strict';
   const api = globalThis.browser ?? globalThis.chrome;
   const { selectors: S, CaptionAssembler, markAgentSpeech } = globalThis.MeetAgent;
+  if (globalThis.MeetAgent.captionPanelLoaded) return;
+  globalThis.MeetAgent.captionPanelLoaded = true;
   const agentIntervals = [];   // cuándo habló la IA (segundos desde el inicio), para marcar su eco en los subtítulos
   const NOTICE = '📝 Estoy tomando notas de esta reunión con MeetAgent (a partir de los subtítulos de Meet; se guardan solo en mi equipo).';
 
   let state = { running: false, meetingId: null, assembler: null, keys: new WeakMap(), nextKey: 1, seen: new Set(), saved: 0, last: '' };
+  let connecting = false;
   let ui;
 
   // Firefox (browser.*) usa promesas; Chrome/Edge (chrome.*) usa callbacks.
-  const native = (payload) => new Promise((resolve) => {
-    const msg = { cmd: 'native', payload };
+  const sendMessage = (msg) => new Promise((resolve) => {
     const fail = (e) => resolve({ ok: false, error: e?.message || String(e || 'sin respuesta') });
     try {
       if (globalThis.browser?.runtime?.sendMessage) {
@@ -23,6 +25,7 @@
       }
     } catch (e) { fail(e); }
   });
+  const native = (payload) => sendMessage({ cmd: 'native', payload });
 
   // ---------- panel ----------
   function buildPanel() {
@@ -51,6 +54,7 @@
       <div class="p">
         <div class="h"><span class="dot"></span>MeetAgent<button class="min" title="Ocultar">–</button></div>
         <div class="s">Usa los subtítulos de Meet. Se guarda solo en tu equipo.</div>
+        <div class="s voice" hidden></div>
         <button class="tg" hidden>▾ Transcripción</button>
         <div class="log" hidden><div class="lines"></div><div class="live"></div></div>
         <div class="row">
@@ -89,6 +93,7 @@
     document.documentElement.appendChild(host);
     return {
       status: (t) => { $('.s').textContent = t; },
+      voice: (t) => { $('.voice').textContent = t; $('.voice').hidden = !t; },
       // [hh:mm:ss] Nombre: texto, estilo Tactiq; el scroll sigue el final salvo que subas a leer.
       add: (seg) => {
         const keep = atBottom();
@@ -103,6 +108,7 @@
       },
       live: (p) => { const keep = atBottom(); $('.live').textContent = p ? `${p.speaker}: ${p.text}` : ''; follow(keep); },
       clear: () => { $('.lines').textContent = ''; $('.live').textContent = ''; },
+      connecting: (on) => { $('.go').disabled = on; },
       running: (on) => {
         $('.p').classList.toggle('on', on);
         $('.go').disabled = on; $('.stop').disabled = !on; $('.notice').disabled = !on;
@@ -112,77 +118,142 @@
 
   // ---------- transcripción ----------
   async function start() {
+    if (connecting || state.running) return;
     const code = S.meetCode();
     if (!code) { ui.status('Entra primero a una reunión.'); return; }
+    connecting = true;
+    ui.connecting(true);
+    try {
+      await connect(code);
+    } finally {
+      connecting = false;
+      ui.connecting(state.running);
+    }
+  }
+
+  async function connect(code) {
     ui.status('Conectando con MeetAgent…');
     const hello = await native({ type: 'hello' });
     if (!hello.ok) { ui.status(`No encuentro MeetAgent en este equipo (${hello.error}). Ejecuta scripts/install-extension-host.sh`); return; }
     const r = await native({ type: 'start', meet: code, title: document.title.replace(/^Meet\s*[-–]\s*/, '') || null });
     if (!r.ok) { ui.status(`MeetAgent rechazó el inicio: ${r.error}`); return; }
+    if (!r.captureId || r.tabId == null) {
+      await native({ type: 'end', meetingId: r.meetingId });
+      ui.status('Actualiza el conector de MeetAgent para guardar subtítulos.');
+      return;
+    }
 
-    state = { running: true, meetingId: r.meetingId, keys: new WeakMap(), nextKey: 1, seen: new Set(), saved: 0, last: '',
-              assembler: new CaptionAssembler({ startMs: Date.now(), selfName: S.selfName() }) };
+    const session = state = { running: true, meetingId: r.meetingId, captureId: r.captureId, tabId: r.tabId, code,
+      keys: new WeakMap(), nextKey: 1, seen: new Set(), captured: 0, revision: 0, unpersisted: {},
+      assembler: new CaptionAssembler({ startMs: performance.now(), selfName: S.selfName(), trackEvents: true }) };
     ui.running(true);
     ui.clear();
     agentIntervals.length = 0;
-    // Canal de voz: desde ahora tu IA puede hablar en este Meet con la herramienta MCP «decir».
-    native({ type: 'voice-on' }).then((v) => { if (v.ok) ui.status(`Reunión #${r.meetingId} · tu IA puede hablar aquí (${v.voice})`); });
-    ensureCaptions();
+    persist(session, [], [], false);
+    claimVoice(session);
+    ensureCaptions(session);
     ui.status(`Reunión #${r.meetingId} · esperando subtítulos…`);
   }
 
+  // El primer Meet que abre el pipe lo conserva hasta terminar. Los demás vuelven a
+  // solicitarlo mientras transcriben y solo anuncian voz activa si el host lo confirma.
+  async function claimVoice(session) {
+    if (!session.running) return;
+    const v = await native({ type: 'voice-on', meetingId: session.meetingId, captureId: session.captureId });
+    if (!session.running) return;
+    ui.voice(v.ok && v.meetingId === session.meetingId ? `Voz activa aquí (${v.voice})`
+      : v.busy ? 'La voz de MeetAgent está activa en otra pestaña.' : '');
+    session.voiceTimer = setTimeout(() => claimVoice(session), 3000);
+  }
+
   // Activa los subtítulos de Meet («Turn on captions» / «Activar subtítulos»); reintenta unas veces.
-  function ensureCaptions(attempt = 1) {
-    if (!state.running || S.captionRegion()) return;
+  function ensureCaptions(session, attempt = 1) {
+    if (!session.running || S.captionRegion()) return;
     S.captionsButton()?.click();
     setTimeout(() => {
-      if (!state.running || S.captionRegion()) return;
-      if (attempt < 3) ensureCaptions(attempt + 1);
+      if (!session.running || S.captionRegion()) return;
+      if (attempt < 3) ensureCaptions(session, attempt + 1);
       else ui.status('No pude activar los subtítulos: pulsa «c» y elige Español en Configuración → Subtítulos.');
     }, 5000);
   }
 
   function scan() {
     if (!state.running) return;
-    const now = Date.now();
+    if (S.meetCode() !== state.code) { stop('Saliste de la reunión.'); return; }
+    const now = performance.now();
+    const ready = collect(now);
+    ui.live(state.assembler.preview());
+    persist(state, ready, state.assembler.checkpoint(now), false);
+  }
+
+  function collect(now) {
     const region = S.captionRegion();
     const present = new Set();
+    const ready = [];
     for (const { el, speaker, text } of S.captionBlocks(region)) {
       let key = state.keys.get(el);
       if (!key) { key = `b${state.nextKey++}`; state.keys.set(el, key); }
       present.add(key);
-      state.assembler.observe(key, speaker, text, now);
+      ready.push(...state.assembler.observe(key, speaker, text, now));
     }
-    const ready = [];
     for (const key of state.seen) if (!present.has(key)) ready.push(...state.assembler.remove(key, now));
     state.seen = present;
     ready.push(...state.assembler.flush(now));
-    ui.live(state.assembler.preview());
-    send(ready);
+    return ready.sort((a, b) => a.start - b.start);
   }
 
-  async function send(segments) {
-    for (const raw of segments) {
-      const s = markAgentSpeech(raw, agentIntervals);
-      const r = await native({ type: 'segment', meetingId: state.meetingId, ...s });
-      if (r.ok) {
-        state.saved++;
-        ui.add(s);
-        ui.status(`Reunión #${state.meetingId} · ${state.saved} segmentos guardados`);
-      } else {
-        ui.status(`No se pudo guardar: ${r.error}`);
+  async function persist(session, segments, draft, closed) {
+    const events = segments.map((s) => markAgentSpeech(s, agentIntervals));
+    const pending = draft.map((s) => markAgentSpeech(s, agentIntervals));
+    const snapshot = JSON.stringify(pending);
+    let batchKey;
+    if (closed || events.length || snapshot !== session.snapshot) {
+      session.snapshot = snapshot;
+      const revision = ++session.revision;
+      const base = { meetingId: session.meetingId, captureId: session.captureId, revision };
+      session.unpersisted[`caption-checkpoint:${session.captureId}:${revision}`] =
+        { ...base, tabId: session.tabId, closed, events: pending };
+      if (events.length) {
+        batchKey = `caption-batch:${session.captureId}:${revision}`;
+        session.unpersisted[batchKey] = { ...base, events };
+        for (const s of events) ui.add(s);
+        session.captured += events.length;
       }
+    }
+    const writes = { ...session.unpersisted };
+    if (!Object.keys(writes).length) return true;
+    try {
+      // El documento conserva incluso el subtítulo todavía visible. El service worker
+      // solo envía los lotes definitivos mientras la pestaña responde.
+      await api.storage.local.set(writes);
+      for (const [key, value] of Object.entries(writes))
+        if (session.unpersisted[key] === value) delete session.unpersisted[key];
+      if (batchKey && session.running) {
+        const r = await sendMessage({ cmd: 'flush-captions', key: batchKey });
+        if (session.running)
+          ui.status(`Reunión #${session.meetingId} · ${session.captured} segmentos capturados${r.ok ? '' : ' · envío pendiente'}`);
+      }
+      return true;
+    } catch (e) {
+      ui.status(`No se pudo guardar el borrador en el navegador: ${e.message}`);
+      return false;
     }
   }
 
   async function stop(message) {
-    if (!state.running) return;
-    state.running = false;
-    await send(state.assembler.drain(Date.now()));
-    await native({ type: 'end', meetingId: state.meetingId });
+    const session = state;
+    if (!session.running) return;
+    session.running = false;
+    clearTimeout(session.voiceTimer);
+    ui.voice('');
+    const now = performance.now();
+    const final = S.meetCode() === session.code ? collect(now) : [];
+    final.push(...session.assembler.drain(now));
+    const saved = await persist(session, final, [], true);
+    await native({ type: 'end', meetingId: session.meetingId, captureId: session.captureId });
     ui.live(null);
     ui.running(false);
-    ui.status(`${message} Reunión #${state.meetingId}: ${state.saved} segmentos.`);
+    if (saved) ui.status(`${message} Reunión #${session.meetingId}: ${session.captured} segmentos capturados.`);
   }
 
   // ---------- voz: la IA habla por tu micrófono ----------
@@ -197,15 +268,18 @@
   function play(r) {
     const id = ++sayId;
     if (state.running) {
-      const t = (Date.now() - state.assembler.startMs) / 1000;
+      const t = (performance.now() - state.assembler.startMs) / 1000;
       agentIntervals.push({ start: t, end: t + (r.seconds || 0) });
     }
     window.postMessage({ source: 'meetagent', type: 'play', id, wav: r.wav }, '*');
     ui.status(`🔊 Hablando (${r.seconds} s, ${r.voice})${r.text ? `: «${r.text}»` : ''}`);
   }
   // Mensajes que empuja el conector: la IA (por el MCP) pidió hablar.
-  (globalThis.browser ?? chrome).runtime.onMessage.addListener((m) => {
-    if (m?.cmd === 'host-push' && m.msg?.type === 'play') play(m.msg);
+  api.runtime.onMessage.addListener((m, _sender, reply) => {
+    if (m?.cmd === 'capture-is-live') {
+      reply({ active: state.running && state.captureId === m.captureId });
+    }
+    if (state.running && m?.cmd === 'host-push' && m.msg?.type === 'play' && m.msg.meetingId === state.meetingId) play(m.msg);
   });
   window.addEventListener('message', (ev) => {
     if (ev.data?.source !== 'meetagent-page') return;
@@ -230,13 +304,22 @@
   // ---------- arranque ----------
   ui = buildPanel();
   let pending = false;
-  new MutationObserver(() => {
+  new MutationObserver((changes) => {
+    if (!state.running) return;
+    const region = S.captionRegion();
+    if (region && changes.some((change) => region.contains(change.target))) {
+      scan();
+      return;
+    }
     if (!state.running || pending) return;
     pending = true;
     setTimeout(() => { pending = false; scan(); }, 300);   // agrupa las ráfagas de cambios de Meet
   }).observe(document.body, { subtree: true, childList: true, characterData: true });
   setInterval(scan, 1000);                                  // detecta pausas aunque el DOM no cambie
   window.addEventListener('pagehide', () => { if (state.running) stop('Saliste de la reunión.'); });
+  document.addEventListener('click', (e) => {
+    if (state.running && S.isLeaveButton?.(e.target?.closest?.('button'))) stop('Saliste de la reunión.');
+  }, true);
   // Diagnóstico de selectores sin exponer contenido: MeetAgentDiag() en la consola de la pestaña.
   globalThis.MeetAgentDiag = () => S.diagnose();
 })();

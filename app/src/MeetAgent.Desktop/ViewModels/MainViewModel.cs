@@ -9,7 +9,8 @@ using MeetAgent.Meet.Vexa;
 namespace MeetAgent.Desktop.ViewModels;
 
 /// <summary>Resultado de un inicio pedido por un agente: lo que eligió el usuario en el diálogo.</summary>
-public sealed record AgentStartResult(Consent Consent, long? MeetingId, bool AlreadyRunning);
+/// <param name="TimedOut">Venció el plazo de la petición sin respuesta del usuario: no se inició nada.</param>
+public sealed record AgentStartResult(Consent Consent, long? MeetingId, bool AlreadyRunning, bool TimedOut = false);
 
 /// <summary>Páginas del shell (barra lateral + contenido).</summary>
 public enum ShellPage
@@ -33,7 +34,7 @@ public sealed record TranscriptLine(string Time, Speaker Speaker, string Text, s
 public sealed partial class MainViewModel : ObservableObject
 {
     private readonly MeetingSession _session;
-    private readonly Func<Task<Consent>> _askConsent;
+    private readonly Func<CancellationToken, Task<Consent>> _askConsent;
     private readonly Action<Action> _ui;
     private readonly Func<DateTimeOffset> _now;
     private readonly Func<BotMeetingSession>? _botFactory;
@@ -43,6 +44,13 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <param name="botFactory">Crea la sesión del bot de Meet (Vexa); null si Vexa no está configurado.</param>
     public MainViewModel(MeetingSession session, string transcriberName, Func<Task<Consent>> askConsent,
+        Action<Action>? ui = null, Func<DateTimeOffset>? now = null, Func<BotMeetingSession>? botFactory = null)
+        : this(session, transcriberName, _ => askConsent(), ui, now, botFactory)
+    {
+    }
+
+    /// <param name="askConsent">Muestra el diálogo; al cancelarse el token (plazo del agente vencido) lo cierra.</param>
+    public MainViewModel(MeetingSession session, string transcriberName, Func<CancellationToken, Task<Consent>> askConsent,
         Action<Action>? ui = null, Func<DateTimeOffset>? now = null, Func<BotMeetingSession>? botFactory = null)
     {
         _session = session;
@@ -255,7 +263,16 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (_bot is null) return;
         LastLog = "Sacando al bot…";
-        await _bot.StopAsync();
+        try
+        {
+            await _bot.StopAsync();
+        }
+        catch (Exception ex)
+        {
+            // Sin esto la excepción tumbaría la app desde el comando; el bot puede seguir en el Meet.
+            LastLog = $"No se pudo sacar al bot: {ex.Message}";
+            return;
+        }
         OnBotEnded();
     }
 
@@ -273,6 +290,8 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanToggle))]
     private async Task ToggleAsync()
     {
+        // La bandeja llama a Execute sin mirar CanExecute: no se arranca otra con el diálogo abierto.
+        if (!CanToggle()) return;
         if (IsRunning) await StopAsync();
         else await StartAsync(null);
     }
@@ -281,12 +300,22 @@ public sealed partial class MainViewModel : ObservableObject
     /// Inicio pedido por un agente (MCP). Muestra el mismo diálogo de consentimiento que el botón;
     /// el agente solo se entera de lo que el usuario eligió.
     /// </summary>
-    public async Task<AgentStartResult> StartFromAgentAsync(string? title)
+    public async Task<AgentStartResult> StartFromAgentAsync(string? title, TimeSpan? timeout = null)
     {
         if (IsRunning || IsBusy) return new AgentStartResult(Consent, _session.MeetingId, AlreadyRunning: true);
-        var consent = await StartAsync(title);
-        return new AgentStartResult(consent, IsRunning ? _session.MeetingId : null, AlreadyRunning: false);
+        // El agente deja de esperar al vencer su petición: una elección posterior no debe iniciar una reunión
+        // de la que el agente ya no se entera. Al vencer se cierra el diálogo y no se arranca.
+        using var deadline = new CancellationTokenSource(timeout ?? AgentConsentTimeout);
+        var consent = await StartAsync(title, deadline.Token);
+        return new AgentStartResult(consent, IsRunning ? _session.MeetingId : null, AlreadyRunning: false,
+            TimedOut: consent == Consent.None && deadline.IsCancellationRequested);
     }
+
+    /// <summary>
+    /// Plazo para responder al diálogo pedido por un agente: algo menos que los 3 min que espera
+    /// <c>empezar_reunion</c> (MeetingTools.ConsentTimeout), para que la respuesta llegue antes de que venza.
+    /// </summary>
+    public static readonly TimeSpan AgentConsentTimeout = TimeSpan.FromMinutes(3) - TimeSpan.FromSeconds(10);
 
     /// <returns>false si no había reunión en curso.</returns>
     public async Task<bool> StopFromAgentAsync()
@@ -296,27 +325,39 @@ public sealed partial class MainViewModel : ObservableObject
         return true;
     }
 
-    private async Task<Consent> StartAsync(string? requestedTitle)
+    private async Task<Consent> StartAsync(string? requestedTitle, CancellationToken deadline = default)
     {
         if (CannotStartReason?.Invoke() is { } why)
         {
             LastLog = $"No se puede empezar: {why}.";
             return Consent.None;
         }
-        var consent = await _askConsent();
-        if (consent == Consent.None)
-        {
-            LastLog = "No se inició: elegiste «Nada».";
-            return Consent.None;
-        }
+        // Ocupado desde que se abre el diálogo: ni la bandeja ni un agente pueden abrir un segundo
+        // diálogo y arrancar dos reuniones a la vez.
         IsBusy = true;
+        Consent consent;
         try
         {
+            consent = await _askConsent(deadline);
+            if (deadline.IsCancellationRequested)
+            {
+                LastLog = "No se inició: pasó el tiempo para responder a la petición del agente.";
+                return Consent.None;
+            }
+            if (consent == Consent.None)
+            {
+                LastLog = "No se inició: elegiste «Nada».";
+                return Consent.None;
+            }
             Lines.Clear();
             OnPropertyChanged(nameof(SegmentCount));
             Consent = consent;
             var title = string.IsNullOrWhiteSpace(requestedTitle) ? $"Reunión {_now():yyyy-MM-dd HH:mm}" : requestedTitle.Trim();
-            if (!await _session.StartAsync(consent, title)) return Consent.None;
+            if (!await _session.StartAsync(consent, title))
+            {
+                Consent = Consent.None;
+                return Consent.None;
+            }
             _startedAt = _now();
             IsRunning = true;
             LastLog = "Reunión iniciada.";
@@ -340,6 +381,11 @@ public sealed partial class MainViewModel : ObservableObject
     {
         IsBusy = true;
         try { await _session.StopAsync(); }
+        catch (Exception ex)
+        {
+            // Lo ya transcrito está guardado segmento a segmento; se avisa en vez de cerrar la app.
+            LastLog = $"La reunión terminó con un error: {ex.Message}";
+        }
         finally
         {
             OnSessionEnded();

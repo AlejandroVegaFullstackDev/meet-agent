@@ -11,17 +11,19 @@ namespace MeetAgent.NativeHost;
 /// </summary>
 public sealed class VoiceChannel : IAsyncDisposable
 {
-    private readonly CancellationTokenSource _cts = new();
+    private readonly CancellationTokenSource _cts;
     private readonly Task _loop;
 
-    private VoiceChannel(string name, CaptionHost host, Func<string, Task> push)
+    private VoiceChannel(string name, CaptionHost host, Func<string, Task> push, long? meetingId)
     {
         // Se crea la primera instancia aquí para que un nombre ya ocupado (otro Meet abierto) falle al iniciar.
         var first = NewServer(name);
-        _loop = Task.Run(() => LoopAsync(name, first, host, push));
+        _cts = new CancellationTokenSource();
+        _loop = Task.Run(() => LoopAsync(first, host, push, meetingId));
     }
 
-    public static VoiceChannel Start(string name, CaptionHost host, Func<string, Task> push) => new(name, host, push);
+    public static VoiceChannel Start(string name, CaptionHost host, Func<string, Task> push, long? meetingId = null) =>
+        new(name, host, push, meetingId);
 
     public static Task<JsonElement?> SayAsync(string text, TimeSpan timeout, string? name = null) =>
         VoiceClient.SayAsync(text, timeout, name);
@@ -29,43 +31,50 @@ public sealed class VoiceChannel : IAsyncDisposable
     private static NamedPipeServerStream NewServer(string name) =>
         new(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
 
-    private async Task LoopAsync(string name, NamedPipeServerStream server, CaptionHost host, Func<string, Task> push)
+    private async Task LoopAsync(NamedPipeServerStream server, CaptionHost host, Func<string, Task> push, long? meetingId)
     {
-        while (!_cts.IsCancellationRequested)
+        await using var pipe = server;
+        try
         {
-            try { await server.WaitForConnectionAsync(_cts.Token); }
-            catch (OperationCanceledException) { await server.DisposeAsync(); break; }
-            await using (server)
+            while (!_cts.IsCancellationRequested)
             {
-                using var r = new StreamReader(server, leaveOpen: true);
-                await using var w = new StreamWriter(server, leaveOpen: true) { AutoFlush = true };
-                string reply;
+                await server.WaitForConnectionAsync(_cts.Token);
                 try
                 {
-                    var line = await r.ReadLineAsync(_cts.Token);
-                    var text = line is null ? null : (string?)(JsonNode.Parse(line) as JsonObject)?["say"];
-                    var play = string.IsNullOrWhiteSpace(text) ? null : host.PlayMessage(text);
-                    if (play is null) reply = """{"ok":false,"error":"Nada que decir o no hay voz instalada"}""";
-                    else
+                    using var r = new StreamReader(server, leaveOpen: true);
+                    await using var w = new StreamWriter(server, leaveOpen: true) { AutoFlush = true };
+                    string reply;
+                    try
                     {
-                        await push(play);
-                        var seconds = (double?)JsonNode.Parse(play)!["seconds"] ?? 0;
-                        reply = new JsonObject { ["ok"] = true, ["seconds"] = seconds }.ToJsonString();
+                        var line = await r.ReadLineAsync(_cts.Token);
+                        var text = line is null ? null : (string?)(JsonNode.Parse(line) as JsonObject)?["say"];
+                        var play = string.IsNullOrWhiteSpace(text) ? null : host.PlayMessage(text, meetingId);
+                        if (play is null) reply = """{"ok":false,"error":"Nada que decir o no hay voz instalada"}""";
+                        else
+                        {
+                            _cts.Token.ThrowIfCancellationRequested();
+                            await push(play);
+                            var seconds = (double?)JsonNode.Parse(play)!["seconds"] ?? 0;
+                            reply = new JsonObject { ["ok"] = true, ["seconds"] = seconds }.ToJsonString();
+                        }
                     }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        reply = new JsonObject { ["ok"] = false, ["error"] = ex.Message }.ToJsonString();
+                    }
+                    await w.WriteLineAsync(reply.AsMemory(), _cts.Token);
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    reply = new JsonObject { ["ok"] = false, ["error"] = ex.Message }.ToJsonString();
-                }
-                try { await w.WriteLineAsync(reply); } catch (IOException) { }
+                catch (IOException) { }
+                finally { server.Disconnect(); }
             }
-            server = NewServer(name);
         }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested) { }
     }
 
     public async ValueTask DisposeAsync()
     {
         _cts.Cancel();
-        try { await _loop; } catch { }
+        try { await _loop; }
+        finally { _cts.Dispose(); }
     }
 }

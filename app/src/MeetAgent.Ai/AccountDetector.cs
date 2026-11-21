@@ -32,14 +32,16 @@ public sealed class AccountDetector(
     /// <summary>Solo para pruebas: sustituye la detección real de <see cref="Connection.IsUsable"/>.</summary>
     internal static Func<AiProvider, bool>? InstalledOverride;
 
+    /// <summary>Listo para usar: el CLI está en el equipo o, para ChatGPT, hay una sesión iniciada.</summary>
     public static bool IsInstalled(AiProvider provider) =>
-        InstalledOverride?.Invoke(provider) ?? Default.Executable(provider) is not null;
+        InstalledOverride?.Invoke(provider) ?? (provider == AiProvider.ChatGptCuenta
+            ? ChatGptSessionStore.Default.HasSession
+            : Default.Executable(provider) is not null);
 
     /// <summary>Nombre del ejecutable de cada cuenta, o null si el proveedor no usa CLI.</summary>
     public static string? CommandOf(AiProvider provider) => provider switch
     {
         AiProvider.ClaudeCuenta => "claude",
-        AiProvider.ChatGptCuenta => "codex",
         AiProvider.GeminiCuenta => "gemini",
         _ => null,
     };
@@ -59,7 +61,6 @@ public sealed class AccountDetector(
             return provider switch
             {
                 AiProvider.ClaudeCuenta => new AccountState(true, await ClaudeLoggedIn(exe, ct).ConfigureAwait(false)),
-                AiProvider.ChatGptCuenta => new AccountState(true, await CodexLoggedIn(exe, ct).ConfigureAwait(false)),
                 AiProvider.GeminiCuenta => new AccountState(true, File.Exists(GeminiCredentials)),
                 _ => new AccountState(true, false),
             };
@@ -82,23 +83,11 @@ public sealed class AccountDetector(
         }
     }
 
-    private async Task<bool> CodexLoggedIn(string exe, CancellationToken ct)
-    {
-        var info = new ProcessStartInfo(exe) { ArgumentList = { "login", "status" } };
-        var (exit, _) = await _run(info, "", ct).ConfigureAwait(false);
-        return exit == 0;
-    }
-
     private string GeminiCredentials => Path.Combine(_home, ".gemini", "oauth_creds.json");
-
-    /// <summary>Carpeta donde MeetAgent guarda el componente descargado de ChatGPT.</summary>
-    public static string ToolsDir => OperatingSystem.IsWindows()
-        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MeetAgent", "tools")
-        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share", "MeetAgent", "tools");
 
     /// <summary>
     /// Busca el ejecutable en el PATH y en las carpetas donde los instaladores oficiales lo dejan
-    /// (incluida la carpeta propia de MeetAgent y la de npm en Windows).
+    /// (incluida la de npm en Windows).
     /// </summary>
     internal static string? FindOnPath(string command)
     {
@@ -114,14 +103,15 @@ public sealed class AccountDetector(
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             if (!string.IsNullOrWhiteSpace(appData)) directories.Add(Path.Combine(appData, "npm"));
         }
-        directories.Add(ToolsDir);
 
+        // En Windows no vale el nombre sin extensión: npm deja ahí un script de bash («claude») que
+        // Windows no puede ejecutar; el que sirve es «claude.cmd» o «claude.exe».
         var extensions = OperatingSystem.IsWindows()
             ? (Environment.GetEnvironmentVariable("PATHEXT") ?? ".COM;.EXE;.BAT;.CMD").Split(';', StringSplitOptions.RemoveEmptyEntries)
             : new[] { "" };
         foreach (var dir in directories.Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            foreach (var ext in extensions.Prepend(""))
+            foreach (var ext in extensions)
             {
                 var candidate = Path.Combine(dir, command + ext.ToLowerInvariant());
                 if (File.Exists(candidate)) return candidate;

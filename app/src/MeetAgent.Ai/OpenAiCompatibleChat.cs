@@ -7,7 +7,7 @@ using MeetAgent.Core.Ports;
 
 namespace MeetAgent.Ai;
 
-public sealed class AiException(string message) : Exception(message);
+public class AiException(string message) : Exception(message);
 
 /// <summary>
 /// <c>POST {base}/chat/completions</c>: OpenAI, DeepSeek, Gemini (endpoint OpenAI), OpenRouter, Groq,
@@ -36,9 +36,15 @@ public sealed class OpenAiCompatibleChat(HttpClient http, string baseUrl, string
             body.Remove("response_format");
             (status, text) = await PostAsync(body, ct).ConfigureAwait(false);
         }
-        if ((int)status >= 400) throw new AiException($"{label} respondió {(int)status}: {Trim(ErrorMessage(text))}");
+        if ((int)status >= 400) throw new AiException(Explain(status, ErrorMessage(text)));
 
-        var content = JsonNode.Parse(text)?["choices"]?[0]?["message"]?["content"]?.GetValue<string>();
+        string? content;
+        try { content = JsonNode.Parse(text)?["choices"]?[0]?["message"]?["content"]?.GetValue<string>(); }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            // Un proxy o un servidor mal configurado puede responder 200 con HTML.
+            throw new AiException($"{label} devolvió una respuesta que no se entiende. Revisa la dirección del servidor.");
+        }
         return content ?? throw new AiException($"{label} no devolvió texto.");
     }
 
@@ -63,9 +69,32 @@ public sealed class OpenAiCompatibleChat(HttpClient http, string baseUrl, string
         }
     }
 
+    /// <summary>Qué hacer según el código; el detalle del proveedor va al final por si hace falta.</summary>
+    private string Explain(HttpStatusCode status, string detail)
+    {
+        var code = (int)status;
+        var keyProblem = code is 401 or 403
+                         || (code == 400 && detail.Contains("api key", StringComparison.OrdinalIgnoreCase));
+        var lead = code switch
+        {
+            _ when keyProblem => $"{label} rechazó la API key. Revisa que esté bien copiada y activa.",
+            402 => $"Tu cuenta de {label} no tiene saldo. Recarga créditos y vuelve a intentar.",
+            404 => $"{label} no encontró el modelo «{model}». Prueba con otro modelo.",
+            429 => $"{label} rechazó la petición por límite o cuota. Revisa tu saldo o espera un momento.",
+            _ => $"{label} respondió {code}.",
+        };
+        return $"{lead} ({code}: {Trim(detail)})";
+    }
+
     internal static string ErrorMessage(string body)
     {
-        try { return JsonNode.Parse(body)?["error"]?["message"]?.GetValue<string>() ?? body; }
+        try
+        {
+            var node = JsonNode.Parse(body);
+            // Gemini envuelve el error en un arreglo.
+            if (node is JsonArray { Count: > 0 } array) node = array[0];
+            return node?["error"]?["message"]?.GetValue<string>() ?? body;
+        }
         catch (JsonException) { return body; }
         catch (InvalidOperationException) { return body; }
     }

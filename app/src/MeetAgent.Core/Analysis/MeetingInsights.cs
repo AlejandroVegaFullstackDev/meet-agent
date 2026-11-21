@@ -46,7 +46,7 @@ public sealed record MeetingInsights(
         var raw = JsonSerializer.Deserialize<Raw>(text[start..(end + 1)], Json)
                   ?? throw new FormatException("La IA devolvió un JSON vacío.");
         return new MeetingInsights(raw.Resumen?.Trim() ?? "",
-            Clean(raw.Decisiones), (raw.Tareas ?? []).Where(t => !string.IsNullOrWhiteSpace(t.Tarea))
+            Clean(raw.Decisiones), (raw.Tareas ?? []).OfType<RawTask>().Where(t => !string.IsNullOrWhiteSpace(t.Tarea))
                 .Select(t => new ActionItem(t.Tarea!.Trim(), Blank(t.Responsable), Blank(t.Fecha))).ToList(),
             Clean(raw.Temas), Clean(raw.PreguntasAbiertas), Clean(raw.Riesgos), Blank(raw.Tono));
     }
@@ -123,7 +123,7 @@ public sealed record MeetingInsights(
     {
         public string? Resumen { get; set; }
         public List<string>? Decisiones { get; set; }
-        public List<RawTask>? Tareas { get; set; }
+        public List<RawTask?>? Tareas { get; set; }
         public List<string>? Temas { get; set; }
         public List<string>? PreguntasAbiertas { get; set; }
         public List<string>? Riesgos { get; set; }

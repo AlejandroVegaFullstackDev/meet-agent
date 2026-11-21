@@ -87,7 +87,8 @@ public sealed partial class ProviderCardViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDefault), nameof(IsConnected), nameof(IsBusy), nameof(HasError),
-        nameof(ActionLabel), nameof(ShowConnectedStatus), nameof(ShowErrorStatus), nameof(ShowProgressStatus))]
+        nameof(ActionLabel), nameof(ShowConnectedStatus), nameof(ShowErrorStatus), nameof(ShowProgressStatus),
+        nameof(ShowCancel))]
     [NotifyCanExecuteChangedFor(nameof(ConnectCommand), nameof(DisconnectCommand))]
     private ProviderCardState _state;
 
@@ -178,7 +179,7 @@ public sealed partial class ProviderCardViewModel : ObservableObject
         IsAdvanced = false;
     }
 
-    /// <summary>Google sin Node pasa a conectar con una API key, sin hablar de instaladores.</summary>
+    /// <summary>Google sin su programa en el equipo pasa a conectar con una key gratis.</summary>
     public void EnableKeyMode(string subtitle)
     {
         Subtitle = subtitle;
@@ -194,6 +195,37 @@ public sealed partial class ProviderCardViewModel : ObservableObject
     }
 
     public void SetKeyStatus(string? status) => KeyStatus = status;
+
+    // --- Cancelar un inicio de sesión en el navegador (ChatGPT, OpenRouter) ---
+    private CancellationTokenSource? _login;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowCancel))]
+    [NotifyCanExecuteChangedFor(nameof(CancelCommand))]
+    private bool _isCancelable;
+
+    /// <summary>«Cancelar» junto al botón mientras se espera el navegador.</summary>
+    public bool ShowCancel => IsBusy && IsCancelable;
+
+    /// <summary>Empieza una espera que el usuario puede cancelar; el token se cancela con «Cancelar».</summary>
+    public CancellationToken BeginCancelable()
+    {
+        _login?.Dispose();
+        _login = new CancellationTokenSource();
+        IsCancelable = true;
+        return _login.Token;
+    }
+
+    /// <summary>Termina la espera cancelable (salió bien, mal o se canceló).</summary>
+    public void EndCancelable()
+    {
+        IsCancelable = false;
+        _login?.Dispose();
+        _login = null;
+    }
+
+    [RelayCommand(CanExecute = nameof(IsCancelable))]
+    private void Cancel() => _login?.Cancel();
 
     private bool CanConnect() => State is not (ProviderCardState.Busy or ProviderCardState.Connected);
 

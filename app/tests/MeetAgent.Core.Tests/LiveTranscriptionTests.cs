@@ -63,6 +63,25 @@ public class LiveTranscriptionTests
     }
 
     [Fact]
+    public async Task Propaga_un_fallo_en_captura()
+    {
+        var live = new LiveTranscription([new FakeSource(Speaker.Yo, Loud)], new ScriptedTranscriber(), new EnergyVad())
+        {
+            OnAudio = (_, _) => throw new IOException("grabador desconectado"),
+        };
+        var failure = await Assert.ThrowsAsync<IOException>(() => Run(live).WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("grabador desconectado", failure.Message);
+    }
+
+    [Fact]
+    public async Task Un_fallo_del_worker_termina_el_enumerador_sin_colgarlo()
+    {
+        var live = new LiveTranscription([new FakeSource(Speaker.Yo), new FakeSource(Speaker.Yo)],
+            new ScriptedTranscriber(), new EnergyVad());
+        await Assert.ThrowsAsync<ArgumentException>(() => Run(live).WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
+    [Fact]
     public async Task Un_solo_transcriptor_atiende_ambos_canales_en_serie()
     {
         var t = new ScriptedTranscriber("a uno", "b dos", "c tres", "d cuatro");

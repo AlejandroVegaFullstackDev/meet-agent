@@ -64,6 +64,23 @@ public class ControlChannelTests
     }
 
     [Fact]
+    public async Task Cerrar_el_servidor_libera_la_conexion_de_una_peticion_pendiente()
+    {
+        var name = Pipe();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var response = new TaskCompletionSource<ControlResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var server = ControlServer.Start(name, _ => { entered.SetResult(); return response.Task; });
+        try
+        {
+            var pending = new ControlClient(name).SendAsync(new ControlRequest(ControlCommand.Start), TimeSpan.FromSeconds(10));
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await server.DisposeAsync();
+            Assert.Null(await pending.WaitAsync(TimeSpan.FromSeconds(2)));
+        }
+        finally { response.TrySetResult(new ControlResponse(false, false, null, null, "cerrado")); }
+    }
+
+    [Fact]
     public void El_protocolo_no_tiene_forma_de_pedir_grabar()
     {
         // La decisión de grabar es solo del usuario en el diálogo de la app.

@@ -27,10 +27,13 @@ public static class SttEndpoints
             if (!req.HasFormContentType)
                 return Results.BadRequest(new { error = new { message = "Se espera multipart/form-data con 'file'" } });
 
-            var form = await req.ReadFormAsync(ct);
+            IFormCollection form;
+            try { form = await req.ReadFormAsync(ct); }
+            catch (InvalidDataException ex) { return Results.BadRequest(new { error = new { message = ex.Message } }); }
             var file = form.Files.GetFile("file");
             if (file is null || file.Length == 0)
                 return Results.BadRequest(new { error = new { message = "Falta 'file'" } });
+            if (file.Length > MaxUploadBytes) return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
 
             short[] pcm;
             try { pcm = await ReadPcm16kMonoAsync(file, ct); }
@@ -59,7 +62,7 @@ public static class SttEndpoints
     private static void Dump(string dir, short[] pcm, OpenAiTranscriptionResult result)
     {
         Directory.CreateDirectory(dir);
-        var name = Path.Combine(dir, $"{DateTime.UtcNow:HHmmss-fff}");
+        var name = Path.Combine(dir, $"{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}-{Guid.NewGuid():N}");
         using (var w = new WavWriter(name + ".wav")) w.Write(pcm);
         File.WriteAllText(name + ".txt", result.Text);
     }
@@ -72,6 +75,8 @@ public static class SttEndpoints
         ms.Position = 0;
         var (rate, channels, samples) = WavReader.Read(ms);
         if (rate == AudioFormat.SampleRate && channels == 1) return samples;
+        if ((long)samples.Length * AudioFormat.SampleRate / channels / rate > MaxUploadBytes / sizeof(short))
+            throw new InvalidDataException("Audio demasiado largo");
         var bytes = new byte[samples.Length * 2];
         Buffer.BlockCopy(samples, 0, bytes, 0, bytes.Length);
         return new PcmConverter(rate, channels).ConvertInt16(bytes);

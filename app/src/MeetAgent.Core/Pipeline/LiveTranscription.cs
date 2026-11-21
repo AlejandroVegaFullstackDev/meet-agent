@@ -56,13 +56,15 @@ public sealed class LiveTranscription(IReadOnlyList<IAudioSource> sources, ITran
 
     public async IAsyncEnumerable<TranscriptSegment> RunAsync([EnumeratorCancellation] CancellationToken ct)
     {
+        using var capture = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var captureToken = capture.Token;
         var queue = Channel.CreateUnbounded<Work>(new UnboundedChannelOptions { SingleReader = true });
         var output = Channel.CreateUnbounded<TranscriptSegment>(new UnboundedChannelOptions { SingleReader = true });
         int depth = 0;
 
         var producers = sources.Select(src => Task.Run(async () =>
         {
-            var chunker = new Chunker(AudioFormat.SampleRate, chunkSeconds, overlapSeconds);
+            Chunker chunker;
             void Offer(AudioChunk chunk)
             {
                 lock (Stats) Stats.Chunks++;
@@ -77,19 +79,37 @@ public sealed class LiveTranscription(IReadOnlyList<IAudioSource> sources, ITran
             }
             try
             {
-                await foreach (var block in src.ReadAsync(ct).ConfigureAwait(false))
+                chunker = new Chunker(AudioFormat.SampleRate, chunkSeconds, overlapSeconds);
+                try
                 {
-                    OnAudio?.Invoke(src.Speaker, block);
-                    foreach (var chunk in chunker.Push(block)) Offer(chunk);
+                    await foreach (var block in src.ReadAsync(captureToken).ConfigureAwait(false))
+                    {
+                        OnAudio?.Invoke(src.Speaker, block);
+                        foreach (var chunk in chunker.Push(block)) Offer(chunk);
+                    }
                 }
+                catch (OperationCanceledException) when (captureToken.IsCancellationRequested) { }
+                if (chunker.Flush() is { } rest && rest.Samples.Length >= AudioFormat.SampleRate / 2) Offer(rest);
             }
-            catch (OperationCanceledException) { }
-            if (chunker.Flush() is { } rest && rest.Samples.Length >= AudioFormat.SampleRate / 2) Offer(rest);
+            catch
+            {
+                capture.Cancel();
+                throw;
+            }
         }, CancellationToken.None)).ToArray();
 
-        _ = Task.WhenAll(producers).ContinueWith(_ => queue.Writer.TryComplete(), TaskScheduler.Default);
+        async Task CompleteQueueAsync()
+        {
+            try
+            {
+                await Task.WhenAll(producers).ConfigureAwait(false);
+                queue.Writer.TryComplete();
+            }
+            catch (Exception ex) { queue.Writer.TryComplete(ex); }
+        }
+        var captureCompletion = CompleteQueueAsync();
 
-        var worker = Task.Run(async () =>
+        async Task TranscribeQueueAsync()
         {
             var mergers = sources.ToDictionary(s => s.Speaker, _ => new OverlapMerger());
             var lastEnd = sources.ToDictionary(s => s.Speaker, _ => TimeSpan.MinValue);
@@ -125,11 +145,31 @@ public sealed class LiveTranscription(IReadOnlyList<IAudioSource> sources, ITran
                 var end = w.Chunk.Start + (kept.Count > 0 ? kept[^1].End : w.Chunk.End - w.Chunk.Start);
                 await output.Writer.WriteAsync(new TranscriptSegment(w.Speaker, start, end, merged)).ConfigureAwait(false);
             }
-            output.Writer.TryComplete();
+        }
+
+        var worker = Task.Run(async () =>
+        {
+            try
+            {
+                await TranscribeQueueAsync().ConfigureAwait(false);
+                output.Writer.TryComplete();
+            }
+            catch (Exception ex)
+            {
+                capture.Cancel();
+                output.Writer.TryComplete(ex);
+            }
         }, CancellationToken.None);
 
-        await foreach (var seg in output.Reader.ReadAllAsync(CancellationToken.None).ConfigureAwait(false))
-            yield return seg;
-        await worker.ConfigureAwait(false);
+        try
+        {
+            await foreach (var seg in output.Reader.ReadAllAsync(CancellationToken.None).ConfigureAwait(false))
+                yield return seg;
+        }
+        finally
+        {
+            capture.Cancel();
+            await Task.WhenAll(captureCompletion, worker).ConfigureAwait(false);
+        }
     }
 }

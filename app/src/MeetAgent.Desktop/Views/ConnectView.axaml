@@ -72,6 +72,8 @@
                     </Border>
                     <Button Content="Desconectar" Command="{Binding DisconnectCommand}"
                             Classes="ghost sm" IsVisible="{Binding IsConnected}" />
+                    <Button Content="Cancelar" Command="{Binding CancelCommand}"
+                            Classes="ghost sm" IsVisible="{Binding ShowCancel}" />
                     <Button Content="{Binding ActionLabel}" Command="{Binding ConnectCommand}"
                             Classes="secondary sm" IsVisible="{Binding !IsConnected}" />
                   </StackPanel>
@@ -86,7 +88,7 @@
                              IsVisible="{Binding HasKeyStatus}" />
                 </StackPanel>
 
-                <!-- Si la instalación falla, se puede seguir con una key. -->
+                <!-- Si la cuenta no se puede usar en este equipo, se puede seguir con una key. -->
                 <Button Content="Usar una API key" Command="{Binding UseApiKeyCommand}"
                         Classes="ghost sm" HorizontalAlignment="Left"
                         IsVisible="{Binding ShowKeyAlternative}" />

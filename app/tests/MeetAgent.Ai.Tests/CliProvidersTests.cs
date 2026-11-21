@@ -60,28 +60,6 @@ public class CliChatTests
     }
 
     [Fact]
-    public async Task Codex_lee_el_archivo_de_salida_y_pasa_el_prompt_por_stdin()
-    {
-        using var runner = new FakeRunner((info, stdin) =>
-        {
-            var args = info.ArgumentList.ToList();
-            Assert.Equal("exec", args[0]);
-            Assert.Contains("--skip-git-repo-check", args);
-            Assert.Equal("read-only", args[args.IndexOf("--sandbox") + 1]);
-            Assert.Equal("-", args[^1]);
-            Assert.Contains("sistema", stdin);
-            Assert.Contains("contenido", stdin);
-            File.WriteAllText(args[args.IndexOf("-o") + 1], "respuesta de Codex");
-            return (0, "");
-        });
-        var chat = new CliChat(Cuenta(AiProvider.ChatGptCuenta), runner.RunAsync, executable: _ => "codex");
-
-        var text = await chat.CompleteAsync("sistema", "contenido", null, default);
-
-        Assert.Equal("respuesta de Codex", text);
-    }
-
-    [Fact]
     public async Task Gemini_pide_json_y_lee_response()
     {
         using var runner = new FakeRunner((info, stdin) =>
@@ -102,7 +80,7 @@ public class CliChatTests
     public async Task Un_cli_que_falla_no_tapa_el_motivo()
     {
         using var runner = new FakeRunner((_, _) => (1, "no estás dentro de un repositorio"));
-        var chat = new CliChat(Cuenta(AiProvider.ChatGptCuenta), runner.RunAsync, executable: _ => "codex");
+        var chat = new CliChat(Cuenta(AiProvider.ClaudeCuenta), runner.RunAsync, executable: _ => "claude");
 
         var ex = await Assert.ThrowsAsync<AiException>(() => chat.CompleteAsync("s", "u", null, default));
 
@@ -128,6 +106,29 @@ public class CliChatTests
     public void Gemini_sin_json_devuelve_el_texto_plano()
     {
         Assert.Equal("listo", CliChat.ParseGemini("  listo  "));
+    }
+
+    [Fact]
+    public async Task Un_programa_que_sale_sin_leer_la_entrada_no_rompe_con_IOException()
+    {
+        var info = OperatingSystem.IsWindows()
+            ? new ProcessStartInfo("cmd.exe") { ArgumentList = { "/c", "echo sesion vencida & exit 3" } }
+            : new ProcessStartInfo("sh") { ArgumentList = { "-c", "echo sesion vencida; exit 3" } };
+        var transcript = new string('x', 4 * 1024 * 1024);
+
+        var (exit, output) = await ProcessRunnerDefault.RunAsync(info, transcript, CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(3, exit);
+        Assert.Contains("sesion vencida", output);
+    }
+
+    [Fact]
+    public async Task Un_programa_que_ya_no_existe_da_un_mensaje_claro()
+    {
+        var info = new ProcessStartInfo(Path.Combine(Path.GetTempPath(), $"no-existe-{Guid.NewGuid():N}.exe"));
+        var ex = await Assert.ThrowsAsync<AiException>(() => ProcessRunnerDefault.RunAsync(info, "", CancellationToken.None));
+        Assert.Contains("instalado", ex.Message);
     }
 }
 
@@ -157,15 +158,6 @@ public class AccountDetectorTests
         var state = await Detector(runner).DetectAsync(AiProvider.ClaudeCuenta);
         Assert.True(state.Installed);
         Assert.False(state.LoggedIn);
-    }
-
-    [Fact]
-    public async Task Codex_usa_el_codigo_de_salida_de_login_status()
-    {
-        using var runner = new FakeRunner((_, _) => (0, "logged in"));
-        Assert.True((await Detector(runner).DetectAsync(AiProvider.ChatGptCuenta)).LoggedIn);
-        using var bad = new FakeRunner((_, _) => (1, "not logged"));
-        Assert.False((await Detector(bad).DetectAsync(AiProvider.ChatGptCuenta)).LoggedIn);
     }
 
     [Fact]
@@ -215,12 +207,13 @@ public class AccountDetectorTests
     }
 
     [Fact]
-    public void La_fabrica_rutea_las_cuentas_a_cli_chat()
+    public void La_fabrica_rutea_las_cuentas()
     {
         try
         {
             AccountDetector.InstalledOverride = _ => true;
-            Assert.IsType<CliChat>(AiFactory.CreateChat(new Connection(AiProvider.ChatGptCuenta, "ChatGPT")));
+            Assert.IsType<CliChat>(AiFactory.CreateChat(new Connection(AiProvider.ClaudeCuenta, "Claude")));
+            Assert.IsType<ChatGptPlanChat>(AiFactory.CreateChat(new Connection(AiProvider.ChatGptCuenta, "gpt-6.1-sol")));
         }
         finally { AccountDetector.InstalledOverride = null; }
     }

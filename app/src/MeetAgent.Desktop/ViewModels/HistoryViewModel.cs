@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MeetAgent.Ai;
 using MeetAgent.Core;
 using MeetAgent.Core.Analysis;
 using MeetAgent.Core.Export;
@@ -151,9 +152,18 @@ public sealed partial class HistoryViewModel(ITranscriptStore store, string expo
             if (Selected?.Id == meetingId) ShowInsights(insights.GetInsights(meetingId));
             Message = "Análisis listo.";
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is AiException or FormatException or InvalidOperationException)
         {
             Message = $"No se pudo analizar: {ex.Message}";
+        }
+        catch (OperationCanceledException)
+        {
+            Message = "No se pudo analizar: la IA tardó demasiado. Inténtalo de nuevo.";
+        }
+        catch (Exception)
+        {
+            // Errores de red o de formato del proveedor: sin texto técnico en inglés.
+            Message = "No se pudo analizar: la IA no respondió bien. Inténtalo de nuevo.";
         }
         finally
         {
@@ -215,7 +225,6 @@ public sealed partial class HistoryViewModel(ITranscriptStore store, string expo
         if (Selected is null) return;
         var meeting = store.GetMeeting(Selected.Id);
         if (meeting is null) return;
-        Directory.CreateDirectory(exportDir);
         var path = Path.Combine(exportDir, $"reunion-{meeting.Id}.md");
         var segments = store.GetSegments(meeting.Id);
         var md = MarkdownExporter.Export(meeting, segments);
@@ -224,10 +233,19 @@ public sealed partial class HistoryViewModel(ITranscriptStore store, string expo
         if (insights?.GetInsights(meeting.Id) is { } saved)
         {
             try { extra += $"## Análisis ({saved.Model})\n\n" + MeetingInsights.Parse(saved.Json).ToMarkdown().Replace("## ", "### ") + "\n"; }
-            catch (FormatException) { }
+            catch (Exception ex) when (ex is FormatException or System.Text.Json.JsonException) { }
         }
         var at = md.IndexOf("## Transcripción", StringComparison.Ordinal);
-        File.WriteAllText(path, at >= 0 ? md.Insert(at, extra) : md + "\n" + extra);
+        try
+        {
+            Directory.CreateDirectory(exportDir);
+            File.WriteAllText(path, at >= 0 ? md.Insert(at, extra) : md + "\n" + extra);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Message = "No se pudo guardar el Markdown. Revisa que la carpeta de datos se pueda escribir.";
+            return;
+        }
         Message = "Reunión exportada a Markdown.";
     }
 

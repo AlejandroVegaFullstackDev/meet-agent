@@ -5,6 +5,9 @@
   const $ = (id) => document.getElementById(id);
   const SOURCE = { subtitulos: 'Subtítulos de Meet', 'bot-transcribir': 'Bot de Meet', grabar: 'Micrófono', transcribir: 'Micrófono' };
   let selected = null, meetings = [], liveTimer = null;
+  let latestOpen = 0, latestSearch = 0, latestList = 0;
+  const rows = new Map();
+  let exporting = false;
 
   const native = (payload) => new Promise((resolve) => {
     const msg = { cmd: 'native', payload };
@@ -17,16 +20,27 @@
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
-  async function loadList() {
-    const r = await native({ type: 'list' });
+  async function loadList(offset = 0) {
+    const request = ++latestList;
+    const r = await native({ type: 'list', offset });
+    if (request !== latestList) return;
     if (!r.ok) {
       $('st').textContent = 'Sin conexión con MeetAgent';
       const box = $('transcript'); box.textContent = '';
       box.append(el('p', 'empty err', `No pude leer tus reuniones: ${r.error}. ¿Instalaste el conector (install.sh / install.ps1)?`));
       return;
     }
-    meetings = r.meetings;
-    $('st').textContent = `${meetings.length} reuniones`;
+    if (!offset) meetings = [];
+    const byId = new Map(meetings.map((m) => [m.id, m]));
+    for (const m of r.meetings) byId.set(m.id, m);
+    meetings = [...byId.values()];
+    $('st').textContent = `${meetings.length}${r.nextOffset != null ? '+' : ''} reuniones`;
+    renderList(r.nextOffset);
+  }
+
+  let listOffset;
+  function renderList(nextOffset = listOffset) {
+    listOffset = nextOffset;
     const ul = $('meetings'); ul.textContent = '';
     for (const m of meetings) {
       const li = el('li', m.id === selected ? 'sel' : '');
@@ -37,38 +51,66 @@
       li.onclick = () => open(m.id);
       ul.append(li);
     }
+    if (nextOffset != null) {
+      const button = el('button', '', 'Cargar más reuniones');
+      button.onclick = () => loadList(nextOffset);
+      const li = el('li');
+      li.append(button);
+      ul.append(li);
+    }
   }
 
-  async function open(id) {
+  async function open(id, cursor = null, poll = false) {
+    clearTimeout(liveTimer);
+    const request = ++latestOpen;
+    if (!cursor) {
+      $('export').disabled = true;
+      rows.clear();
+    }
     selected = id;
-    const r = await native({ type: 'get', meetingId: id });
-    if (!r.ok) { $('msg').textContent = r.error; return; }
+    const r = await native({ type: 'get', meetingId: id, ...cursor });
+    if (request !== latestOpen) return;
+    if (!r.ok) { $('msg').textContent = r.error; return false; }
     $('title').textContent = r.title;
-    $('export').disabled = false;
+    $('export').disabled = exporting;
     const box = $('transcript');
-    const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
-    box.textContent = '';
-    if (!r.segments.length) box.append(el('p', 'empty', 'Todavía no hay texto en esta reunión.'));
+    const atBottom = poll && box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+    const top = cursor ? box.scrollTop : 0;
     for (const s of r.segments) {
+      const key = s.id ?? rows.size;
+      const previous = rows.get(key);
+      if (previous) previous.text += s.text;
+      else rows.set(key, { ...s });
+    }
+    box.textContent = '';
+    if (!rows.size) box.append(el('p', 'empty', 'Todavía no hay texto en esta reunión.'));
+    for (const s of [...rows.values()].sort((a, b) => a.startMs - b.startMs || a.id - b.id)) {
       const row = el('div', 'row' + (s.self ? ' me' : ''));
       row.append(el('span', 'time', `[${s.time}]`), el('span', 'who', s.speaker), el('span', '', s.text));
       box.append(row);
     }
-    if (atBottom) box.scrollTop = box.scrollHeight;
-    for (const li of $('meetings').children) li.classList.toggle('sel', false);
-    const idx = meetings.findIndex((m) => m.id === id);
-    if (idx >= 0) $('meetings').children[idx]?.classList.add('sel');
-    // Si la reunión sigue en curso, se actualiza sola cada 5 s.
-    clearInterval(liveTimer);
-    if (meetings[idx]?.open) liveTimer = setInterval(() => { open(id); }, 5000);
+    if (r.more) {
+      const more = el('button', '', 'Cargar más subtítulos');
+      more.onclick = async () => {
+        more.disabled = true;
+        if (await open(id, r.next) === false) more.disabled = false;
+      };
+      box.append(more);
+    } else if (r.open) {
+      liveTimer = setTimeout(() => { open(id, r.next, true); }, 5000);
+    }
+    box.scrollTop = atBottom ? box.scrollHeight : top;
+    renderList();
   }
 
   $('search').onsubmit = async (e) => {
     e.preventDefault();
+    const request = ++latestSearch;
     const q = $('q').value.trim();
     const ul = $('hits'); ul.textContent = '';
     if (!q) { ul.hidden = true; return; }
     const r = await native({ type: 'search', q });
+    if (request !== latestSearch) return;
     ul.hidden = false;
     if (!r.ok || !r.hits.length) { ul.append(el('li', 'm', r.ok ? `Sin resultados para «${q}».` : r.error)); return; }
     for (const h of r.hits) {
@@ -86,15 +128,30 @@
   $('refresh').onclick = async () => { await loadList(); if (selected) await open(selected); };
 
   $('export').onclick = async () => {
-    if (!selected) return;
-    const r = await native({ type: 'export', meetingId: selected });
-    if (!r.ok) { $('msg').textContent = r.error; return; }
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([r.markdown], { type: 'text/markdown' }));
-    a.download = r.filename;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    $('msg').textContent = `Descargado ${r.filename}`;
+    if (!selected || exporting) return;
+    const meetingId = selected;
+    exporting = true;
+    $('export').disabled = true;
+    try {
+      let r, exportId, offset = 0;
+      const parts = [];
+      do {
+        r = await native({ type: 'export', meetingId, exportId, offset });
+        if (!r.ok) { $('msg').textContent = r.error; return; }
+        parts.push(r.markdown);
+        exportId = r.exportId;
+        offset = r.nextOffset;
+      } while (offset != null);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob(parts, { type: 'text/markdown' }));
+      a.download = r.filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      $('msg').textContent = `Descargado ${r.filename}`;
+    } finally {
+      exporting = false;
+      $('export').disabled = false;
+    }
   };
 
   // Diagnóstico abierto desde el panel del Meet (history.html#diag)

@@ -5,6 +5,18 @@ const { mergeCaption, CaptionAssembler } = require('../assembler.js');
 
 test('mergeCaption: el texto que crece reemplaza al anterior', () => {
   assert.equal(mergeCaption('Hola a', 'Hola a todos'), 'Hola a todos');
+  assert.equal(mergeCaption('hola', 'Hola a todos'), 'Hola a todos');
+});
+
+test('conserva texto y autor cuando Meet reutiliza el mismo nodo para otro hablante', () => {
+  const a = new CaptionAssembler({ startMs: 0 });
+  a.observe('b1', 'Ana', 'Primera idea', 1000);
+  assert.deepEqual(a.observe('b1', 'Luis', 'Segunda idea', 1500), [
+    { speaker: 'Ana', self: false, start: 1, end: 1, text: 'Primera idea' },
+  ]);
+  assert.deepEqual(a.drain(2000), [
+    { speaker: 'Luis', self: false, start: 1.5, end: 1.5, text: 'Segunda idea' },
+  ]);
 });
 
 test('mergeCaption: Meet corta el inicio de un bloque largo y no se pierde nada', () => {

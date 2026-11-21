@@ -121,8 +121,7 @@ public class AiTests
     {
         AiSettings? saved = null;
         var connector = new AccountConnector(find: _ => "cli",
-            run: (_, _, _) => Task.FromResult((0, """{"loggedIn":true}""")),
-            confirmInstall: _ => Task.FromResult(false));
+            run: (_, _, _) => Task.FromResult((0, """{"loggedIn":true}""")));
         try
         {
             AccountDetector.InstalledOverride = _ => true;
@@ -141,19 +140,123 @@ public class AiTests
     }
 
     [AvaloniaFact]
-    public async Task Sin_instalar_la_tarjeta_pide_permiso_sin_abrir_el_navegador()
+    public async Task Continuar_con_ChatGPT_inicia_sesion_prueba_y_guarda_el_modelo()
     {
-        var opened = "";
-        var connector = new AccountConnector(find: _ => null, confirmInstall: _ => Task.FromResult(false));
-        var vm = new ConnectViewModel(new AiSettings(), _ => { }, connector: connector, openUrl: u => opened = u);
+        AiSettings? saved = null;
+        Connection? tested = null;
+        try
+        {
+            AccountDetector.InstalledOverride = _ => true;
+            var vm = new ConnectViewModel(new AiSettings(), s => saved = s,
+                createChat: c => { tested = c; return new FakeChat("listo"); },
+                chatGptLogin: _ => Task.FromResult("gpt-6.1-sol"), openUrl: _ => { },
+                chatGptResume: _ => Task.FromResult<string?>(null));
 
-        await vm.StartAsync();
-        Assert.Equal("Iniciar sesión con ChatGPT", vm.ChatGpt.ActionLabel);
+            Assert.Equal("Continuar con ChatGPT", vm.ChatGpt.ActionLabel);
+            await vm.ChatGpt.ConnectCommand.ExecuteAsync(null);
+
+            Assert.Equal("gpt-6.1-sol", tested!.Model);
+            Assert.Equal(AiProvider.ChatGptCuenta, saved!.Chat!.Provider);
+            Assert.Null(saved.Chat.ApiKey);
+            Assert.True(vm.ChatGpt.IsConnected);
+            Assert.Equal("ChatGPT ✓", vm.StatusText);
+        }
+        finally { AccountDetector.InstalledOverride = null; }
+    }
+
+    [AvaloniaFact]
+    public async Task Si_el_plan_de_ChatGPT_no_sirve_la_tarjeta_lo_dice()
+    {
+        var vm = new ConnectViewModel(new AiSettings(), _ => { },
+            createChat: _ => throw new AiException("Tu plan de ChatGPT no se puede usar en otras apps."),
+            chatGptLogin: _ => Task.FromResult("gpt-6.1-sol"), openUrl: _ => { },
+                chatGptResume: _ => Task.FromResult<string?>(null));
 
         await vm.ChatGpt.ConnectCommand.ExecuteAsync(null);
-        Assert.Equal("", opened);
-        Assert.False(vm.ChatGpt.IsConnected);
+
+        Assert.True(vm.ChatGpt.HasError);
+        Assert.Equal("Tu plan de ChatGPT no se puede usar en otras apps.", vm.ChatGpt.Status);
+    }
+
+    [AvaloniaFact]
+    public async Task Desconectar_ChatGPT_cierra_la_sesion()
+    {
+        var signedOut = false;
+        try
+        {
+            AccountDetector.InstalledOverride = _ => true;
+            var vm = new ConnectViewModel(new AiSettings(new Connection(AiProvider.ChatGptCuenta, "gpt-6.1-sol")), _ => { },
+                chatGptSignOut: () => { signedOut = true; return Task.CompletedTask; });
+            Assert.True(vm.ChatGpt.IsConnected);
+
+            await vm.ChatGpt.DisconnectCommand.ExecuteAsync(null);
+
+            Assert.True(signedOut);
+            Assert.False(vm.ChatGpt.IsConnected);
+        }
+        finally { AccountDetector.InstalledOverride = null; }
+    }
+
+    [AvaloniaFact]
+    public async Task Con_una_sesion_de_ChatGPT_ya_guardada_conecta_sin_abrir_el_navegador()
+    {
+        AiSettings? saved = null;
+        var logins = 0;
+        try
+        {
+            AccountDetector.InstalledOverride = _ => true;
+            var vm = new ConnectViewModel(new AiSettings(), s => saved = s,
+                createChat: _ => new FakeChat("listo"),
+                chatGptLogin: _ => { logins++; return Task.FromResult("otro"); }, openUrl: _ => { },
+                chatGptResume: _ => Task.FromResult<string?>("gpt-6.1-sol"));
+
+            await vm.ChatGpt.ConnectCommand.ExecuteAsync(null);
+
+            Assert.Equal(0, logins);
+            Assert.Equal("gpt-6.1-sol", saved!.Chat!.Model);
+            Assert.True(vm.ChatGpt.IsConnected);
+        }
+        finally { AccountDetector.InstalledOverride = null; }
+    }
+
+    [AvaloniaFact]
+    public async Task Cancelar_el_login_de_ChatGPT_deja_la_tarjeta_como_al_principio()
+    {
+        var vm = new ConnectViewModel(new AiSettings(), _ => { },
+            chatGptLogin: ct => Task.Delay(Timeout.Infinite, ct).ContinueWith<string>(_ => throw new OperationCanceledException(ct), TaskScheduler.Default),
+            openUrl: _ => { }, chatGptResume: _ => Task.FromResult<string?>(null));
+
+        var connect = vm.ChatGpt.ConnectCommand.ExecuteAsync(null);
+        Assert.True(vm.ChatGpt.IsBusy);
+        Assert.True(vm.ChatGpt.ShowCancel);
+
+        vm.ChatGpt.CancelCommand.Execute(null);
+        await connect.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(vm.ChatGpt.IsDefault);
+        Assert.False(vm.ChatGpt.HasError);
+        Assert.False(vm.ChatGpt.ShowCancel);
         Assert.Null(vm.ChatGpt.Status);
+        Assert.Equal("Continuar con ChatGPT", vm.ChatGpt.ActionLabel);
+    }
+
+    [AvaloniaFact]
+    public async Task Cancelar_el_login_de_OpenRouter_deja_la_tarjeta_como_al_principio()
+    {
+        AiSettings? saved = null;
+        var vm = new ConnectViewModel(new AiSettings(), s => saved = s,
+            openRouterLogin: async ct => { await Task.Delay(Timeout.Infinite, ct); return "nunca"; },
+            openUrl: _ => { });
+
+        var connect = vm.OpenRouter.ConnectCommand.ExecuteAsync(null);
+        Assert.True(vm.OpenRouter.ShowCancel);
+
+        vm.OpenRouter.CancelCommand.Execute(null);
+        await connect.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(vm.OpenRouter.IsDefault);
+        Assert.False(vm.OpenRouter.ShowCancel);
+        Assert.Null(saved);
     }
 
     [AvaloniaFact]
@@ -195,11 +298,7 @@ public class AiTests
     public async Task Google_sin_componente_se_conecta_con_key_en_su_tarjeta()
     {
         AiSettings? saved = null;
-        Task<(int ExitCode, string Output)> NoNode(System.Diagnostics.ProcessStartInfo info, string stdin,
-            CancellationToken ct) => Task.FromResult((1, "no hay node"));
-        var installer = new AccountInstaller(run: NoNode, find: name => name == "node" ? "node" : null);
-        var connector = new AccountConnector(find: _ => null, run: NoNode, installer: installer,
-            confirmInstall: _ => Task.FromResult(true));
+        var connector = new AccountConnector(find: _ => null);
         var vm = new ConnectViewModel(new AiSettings(), s => saved = s,
             createChat: _ => new FakeChat("listo"), connector: connector);
 
@@ -233,11 +332,7 @@ public class AiTests
     [AvaloniaFact]
     public async Task Si_falla_la_cuenta_se_puede_seguir_con_una_api_key()
     {
-        Task<(int ExitCode, string Output)> Failing(System.Diagnostics.ProcessStartInfo info, string stdin,
-            CancellationToken ct) => Task.FromResult((1, "sin conexión"));
-        var installer = new AccountInstaller(run: Failing, find: _ => null);
-        var connector = new AccountConnector(find: _ => null, run: Failing, installer: installer,
-            confirmInstall: _ => Task.FromResult(true));
+        var connector = new AccountConnector(find: _ => null);
         var vm = new ConnectViewModel(new AiSettings(), _ => { }, connector: connector, openUrl: _ => { });
 
         await vm.Claude.ConnectCommand.ExecuteAsync(null);

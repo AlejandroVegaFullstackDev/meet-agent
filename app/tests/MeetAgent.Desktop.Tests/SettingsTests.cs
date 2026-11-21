@@ -81,4 +81,19 @@ public class SettingsTests
 
         Assert.Equal(SettingsViewModel.PrivacyUrl, opened);
     }
+
+    [Fact]
+    public void Conectar_groq_desde_otra_pagina_actualiza_el_transcriptor_en_ajustes()
+    {
+        var vm = new SettingsViewModel(new AiSettings(), _ => { });
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        vm.Reload(new AiSettings(Transcription: new Connection(AiProvider.Groq, "whisper-large-v3-turbo", "gsk-1")));
+
+        Assert.Contains(nameof(SettingsViewModel.TranscriptionName), changed);
+        Assert.Contains(nameof(SettingsViewModel.NeedsTranscriber), changed);
+        Assert.Contains(nameof(SettingsViewModel.HasTranscriber), changed);
+        Assert.Equal("Groq ✓", vm.TranscriptionName);
+    }
 }

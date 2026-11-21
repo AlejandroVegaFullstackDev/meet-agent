@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using MeetAgent.Core;
 
 namespace MeetAgent.Desktop.Views;
@@ -17,11 +18,13 @@ public sealed partial class ConsentDialog : Window
         Opened += (_, _) => TranscribeButton.Focus();
     }
 
-    public static async Task<Consent> AskAsync(Window owner)
+    /// <param name="ct">Al cancelarse (venció la petición del agente) el diálogo se cierra como «Nada».</param>
+    public static async Task<Consent> AskAsync(Window owner, CancellationToken ct = default)
     {
         var dialog = new ConsentDialog();
+        using var expire = ct.Register(() => Dispatcher.UIThread.Post(() => dialog.Close(Consent.None)));
         var result = await dialog.ShowDialog<Consent?>(owner);
-        return result ?? Consent.None;
+        return ct.IsCancellationRequested ? Consent.None : result ?? Consent.None;
     }
 
     private void OnStart(object? sender, RoutedEventArgs e) =>

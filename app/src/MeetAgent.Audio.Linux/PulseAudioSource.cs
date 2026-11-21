@@ -59,6 +59,20 @@ public sealed class PulseAudioSource : IAudioSource
     // Bucle que (re)lanza parec y vuelca su stdout al canal hasta cancelar.
     private async Task PumpAsync(ChannelWriter<short[]> writer, CancellationToken ct)
     {
+        try
+        {
+            await PumpLoopAsync(writer, ct).ConfigureAwait(false);
+            writer.TryComplete();
+        }
+        catch (Exception ex)
+        {
+            // Sin esto, si parec no existe o no arranca, el lector esperaría para siempre sin audio ni error.
+            writer.TryComplete(ex);
+        }
+    }
+
+    private async Task PumpLoopAsync(ChannelWriter<short[]> writer, CancellationToken ct)
+    {
         var buffer = new byte[3200];          // 100 ms
         byte? pending = null;
         while (!ct.IsCancellationRequested)
@@ -71,9 +85,9 @@ public sealed class PulseAudioSource : IAudioSource
                     $"--client-name=MeetAgent --stream-name=MeetAgent-{Speaker}")
                 {
                     RedirectStandardOutput = true,
-                    RedirectStandardError = true,
                     UseShellExecute = false,
                 })!;
+                _parec?.Dispose();
                 _parec = p;
             }
             var stdout = p.StandardOutput.BaseStream;
@@ -104,7 +118,6 @@ public sealed class PulseAudioSource : IAudioSource
             Log?.Invoke($"[{Speaker}] parec terminó (código {(p.HasExited ? p.ExitCode : -1)}); relanzando sobre {_currentDevice}");
             try { await Task.Delay(100, ct).ConfigureAwait(false); } catch (OperationCanceledException) { break; }
         }
-        writer.TryComplete();
     }
 
     private void StartWatcher(CancellationToken ct)
@@ -148,6 +161,7 @@ public sealed class PulseAudioSource : IAudioSource
             RedirectStandardOutput = true,
             UseShellExecute = false,
         })!;
+        using var _ = p;
         var name = p.StandardOutput.ReadToEnd().Trim();
         p.WaitForExit();
         return _isMonitor ? name + ".monitor" : name;

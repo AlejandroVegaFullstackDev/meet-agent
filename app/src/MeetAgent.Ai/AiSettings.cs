@@ -54,10 +54,9 @@ public sealed class AiSettingsStore(string path)
 
     public void Save(AiSettings s)
     {
-        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
         var stored = s with { Chat = Hide(s.Chat), Transcription = Hide(s.Transcription) };
-        File.WriteAllText(path, JsonSerializer.Serialize(stored, Json));
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        // Atómico (temporal + reemplazo) y, fuera de Windows, con permisos 600 desde que el archivo existe.
+        PrivateFile.WriteAllText(path, JsonSerializer.Serialize(stored, Json));
     }
 
     private static Connection? Hide(Connection? c) => c is null ? null : c with { ApiKey = Protect(c.ApiKey) };

@@ -47,7 +47,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(AiName), nameof(HasUsableAi), nameof(AiStatus))]
+    [NotifyPropertyChangedFor(nameof(AiName), nameof(HasUsableAi), nameof(AiStatus), nameof(HasTranscriber),
+        nameof(TranscriptionName), nameof(NeedsTranscriber))]
     private AiSettings _settings;
 
     [ObservableProperty] private bool _analyzeWhenMeetingEnds;

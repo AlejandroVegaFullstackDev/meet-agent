@@ -17,31 +17,45 @@ public sealed partial class ConnectViewModel : ObservableObject
     private readonly Func<CancellationToken, Task<string>> _openRouterLogin;
     private readonly Action<string> _openUrl;
     private readonly Func<CancellationToken, Task<IReadOnlyList<LocalModel>>> _detectModels;
+    private readonly Func<CancellationToken, Task<string>> _chatGptLogin;
+    private readonly Func<Task> _chatGptSignOut;
+    private readonly Func<CancellationToken, Task<string?>> _chatGptResume;
 
     /// <param name="createChat">Arma la IA de una conexión (en pruebas, una falsa).</param>
     /// <param name="connector">Conecta cuentas con un clic (en pruebas, uno falso).</param>
     /// <param name="openRouterLogin">Inicia sesión en OpenRouter y devuelve la API key.</param>
     /// <param name="detectModels">Busca modelos en Ollama y LM Studio.</param>
-    /// <param name="askInstall">Pide permiso antes de descargar el componente oficial.</param>
+    /// <param name="chatGptLogin">«Continuar con ChatGPT»: inicia sesión y devuelve el modelo a usar.</param>
+    /// <param name="chatGptSignOut">Cierra la sesión de ChatGPT.</param>
+    /// <param name="chatGptResume">Reutiliza la sesión de ChatGPT ya guardada; devuelve el modelo o null.</param>
     public ConnectViewModel(AiSettings current, Action<AiSettings> save,
         Func<Connection, IChatModel>? createChat = null,
         AccountConnector? connector = null,
         Func<CancellationToken, Task<string>>? openRouterLogin = null,
         Action<string>? openUrl = null,
         Func<CancellationToken, Task<IReadOnlyList<LocalModel>>>? detectModels = null,
-        Func<AiProvider, Task<bool>>? askInstall = null)
+        Func<CancellationToken, Task<string>>? chatGptLogin = null,
+        Func<Task>? chatGptSignOut = null,
+        Func<CancellationToken, Task<string?>>? chatGptResume = null)
     {
         _save = save;
         _createChat = createChat ?? AiFactory.CreateChat;
         _openUrl = openUrl ?? OpenRouterLogin.OpenBrowser;
-        _connector = connector ?? new AccountConnector(confirmInstall: askInstall ?? (_ => Task.FromResult(false)));
+        _connector = connector ?? new AccountConnector();
+        _chatGptLogin = chatGptLogin ?? (async ct =>
+        {
+            var credentials = await ChatGptLogin.LoginAsync(AiFactory.Http, ChatGptSessionStore.Default, ct: ct);
+            return await ChatGptLogin.DefaultModelAsync(AiFactory.Http, credentials.AccessToken, ct);
+        });
+        _chatGptResume = chatGptResume ?? (ct => ChatGptLogin.ResumeAsync(AiFactory.Http, ChatGptSessionStore.Default, ct));
+        _chatGptSignOut = chatGptSignOut ?? (() => ChatGptLogin.SignOutAsync(AiFactory.Http, ChatGptSessionStore.Default));
         _openRouterLogin = openRouterLogin ?? (ct => OpenRouterLogin.LoginAsync(AiFactory.Http, ct: ct));
         _detectModels = detectModels ?? (ct => new LocalModels().ListAsync(ct));
 
         Claude = new ProviderCardViewModel("Claude", "Usa tu cuenta de Claude", "Iniciar sesión con Claude",
             ProviderCardKind.Account, ConnectCardAsync, AiProvider.ClaudeCuenta,
             "ProviderClaudeBrush", "C", disconnect: DisconnectCardAsync, openUrl: _openUrl, useApiKey: UseApiKey);
-        ChatGpt = new ProviderCardViewModel("ChatGPT", "Usa tu cuenta de ChatGPT", "Iniciar sesión con ChatGPT",
+        ChatGpt = new ProviderCardViewModel("ChatGPT", "Usa tu plan de ChatGPT (Plus o Pro)", "Continuar con ChatGPT",
             ProviderCardKind.Account, ConnectCardAsync, AiProvider.ChatGptCuenta,
             "ProviderOpenAiBrush", "AI", disconnect: DisconnectCardAsync, openUrl: _openUrl, useApiKey: UseApiKey);
         Gemini = new ProviderCardViewModel("Google (Gemini)", "Usa tu cuenta de Google", "Iniciar sesión con Google",
@@ -147,7 +161,9 @@ public sealed partial class ConnectViewModel : ObservableObject
     /// <summary>Comprueba si las cuentas ya tienen sesión. No gasta tokens ni instala nada.</summary>
     public async Task StartAsync()
     {
-        foreach (var card in new[] { Claude, ChatGpt, Gemini })
+        if (!ChatGpt.IsConnected && !ChatGpt.IsBusy && !ChatGpt.HasError)
+            ChatGpt.Status = AccountDetector.IsInstalled(AiProvider.ChatGptCuenta) ? "Sesión detectada ✓" : null;
+        foreach (var card in new[] { Claude, Gemini })
         {
             if (card.Provider is not { } provider || card.IsConnected || card.IsBusy || card.HasError) continue;
             var state = await _connector.DetectAsync(provider);
@@ -162,6 +178,7 @@ public sealed partial class ConnectViewModel : ObservableObject
 
     private Task ConnectCardAsync(ProviderCardViewModel card) => card.Kind switch
     {
+        ProviderCardKind.Account when card.Provider == AiProvider.ChatGptCuenta => LoginChatGptAsync(card),
         ProviderCardKind.Account => ConnectAccountAsync(card),
         ProviderCardKind.OpenRouter => LoginOpenRouterAsync(card),
         ProviderCardKind.DeepSeek => ConnectDeepSeekAsync(card),
@@ -221,17 +238,79 @@ public sealed partial class ConnectViewModel : ObservableObject
     {
         card.State = ProviderCardState.Busy;
         card.Status = "Abriendo el navegador…";
+        var ct = card.BeginCancelable();
         try
         {
-            var login = _openRouterLogin(CancellationToken.None);
+            var login = _openRouterLogin(ct);
             if (!login.IsCompleted) card.Status = "Esperando que inicies sesión…";
             var key = await login;
+            card.EndCancelable();
             SaveChat(new Connection(AiProvider.OpenRouter, Providers.Get(AiProvider.OpenRouter).ChatModel, key));
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            card.SetDisconnected(); // «Cancelar»: el puerto ya se liberó y la tarjeta vuelve a su estado inicial
+        }
+        catch (AiException ex)
+        {
+            card.SetError(ex.Message, alternative: false);
         }
         catch (Exception)
         {
             card.SetError("No pudimos conectar OpenRouter. Inténtalo de nuevo.", alternative: false);
         }
+        finally
+        {
+            card.EndCancelable();
+        }
+    }
+
+    /// <summary>
+    /// Sesión oficial de ChatGPT (sin instalar nada). Si este equipo ya tiene una sesión válida se reutiliza
+    /// sin abrir el navegador; si no, se inicia sesión. Después se prueba con una pregunta mínima.
+    /// </summary>
+    private async Task LoginChatGptAsync(ProviderCardViewModel card)
+    {
+        card.State = ProviderCardState.Busy;
+        card.Status = "Comprobando tu sesión…";
+        string model;
+        var ct = card.BeginCancelable();
+        try
+        {
+            var resumed = await _chatGptResume(ct);
+            if (resumed is not null)
+            {
+                model = resumed;
+            }
+            else
+            {
+                card.Status = "Abriendo el navegador…";
+                var login = _chatGptLogin(ct);
+                if (!login.IsCompleted) card.Status = "Esperando que inicies sesión…";
+                model = await login;
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            card.EndCancelable();
+            card.SetDisconnected(); // «Cancelar»: el puerto ya se liberó y la tarjeta vuelve a su estado inicial
+            return;
+        }
+        catch (AiException ex)
+        {
+            card.SetError(ex.Message, alternative: false);
+            return;
+        }
+        catch (Exception)
+        {
+            card.SetError("No pudimos conectar ChatGPT. Inténtalo de nuevo.", alternative: false);
+            return;
+        }
+        finally
+        {
+            card.EndCancelable();
+        }
+        await TestAndSaveAsync(card, new Connection(AiProvider.ChatGptCuenta, model));
     }
 
     private async Task ConnectDeepSeekAsync(ProviderCardViewModel card)
@@ -281,6 +360,11 @@ public sealed partial class ConnectViewModel : ObservableObject
             await model.CompleteAsync("Responde solo con la palabra: listo", "¿Estás conectado?", null, CancellationToken.None);
             SaveChat(connection);
         }
+        catch (AiException ex)
+        {
+            // El motivo real (key mala, sin saldo, modelo inexistente…) dice qué hacer.
+            card.SetError(ex.Message, alternative: false);
+        }
         catch (Exception)
         {
             card.SetError("No pudimos conectar. Revisa la key e inténtalo de nuevo.", alternative: false);
@@ -294,12 +378,16 @@ public sealed partial class ConnectViewModel : ObservableObject
     }
 
     /// <summary>Desconecta la IA activa; el resto de la configuración (transcriptor) se conserva.</summary>
-    private Task DisconnectCardAsync(ProviderCardViewModel card)
+    private async Task DisconnectCardAsync(ProviderCardViewModel card)
     {
+        if (card.Provider == AiProvider.ChatGptCuenta)
+        {
+            try { await _chatGptSignOut(); }
+            catch (Exception) { /* Sin red: los tokens locales se borran igual dentro de SignOutAsync. */ }
+        }
         if (Settings.Chat is { } chat && Matches(card, chat.Provider))
             Apply(Settings with { Chat = null });
         RefreshFromSettings();
-        return Task.CompletedTask;
     }
 
     /// <summary>El aviso de error ofrece seguir con una API key en la tarjeta correspondiente.</summary>

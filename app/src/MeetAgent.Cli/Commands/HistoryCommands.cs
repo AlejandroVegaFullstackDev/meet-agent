@@ -20,16 +20,31 @@ public static class HistoryCommands
     /// <summary><c>export [--meeting ID] [--out archivo.md]</c>: por defecto la última reunión, a data/reunion-ID.md.</summary>
     public static async Task<int> ExportAsync(Args args)
     {
+        long? meetingId = null;
+        if (args.Has("meeting"))
+        {
+            if (!long.TryParse(args.Get("meeting"), out var id) || id <= 0)
+            {
+                Console.Error.WriteLine("--meeting requiere un ID de reunión positivo.");
+                return 1;
+            }
+            meetingId = id;
+        }
         using var store = Store.Open();
-        var meeting = args.Get("meeting") is { } id ? store.GetMeeting(long.Parse(id)) : store.ListMeetings().FirstOrDefault();
+        var meeting = meetingId is { } requested ? store.GetMeeting(requested) : store.ListMeetings().FirstOrDefault();
         if (meeting is null)
         {
-            Console.Error.WriteLine("No hay reuniones guardadas.");
+            Console.Error.WriteLine(meetingId is null ? "No hay reuniones guardadas." : $"No existe la reunión #{meetingId}.");
             return 1;
         }
         var md = MarkdownExporter.Export(meeting, store.GetSegments(meeting.Id));
         var outPath = args.Get("out") ?? Path.Combine(Paths.Data, $"reunion-{meeting.Id}.md");
-        await File.WriteAllTextAsync(outPath, md);
+        try { await File.WriteAllTextAsync(outPath, md); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            Console.Error.WriteLine($"No se pudo exportar la reunión: {ex.Message}");
+            return 1;
+        }
         Console.WriteLine(outPath);
         return 0;
     }

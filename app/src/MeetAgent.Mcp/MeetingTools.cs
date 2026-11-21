@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Diagnostics;
 using System.Text;
 using MeetAgent.Control;
 using MeetAgent.Core;
@@ -164,9 +165,12 @@ public sealed class MeetingTools(Func<ITranscriptStore> openStore, IAppControl a
     /// </summary>
     public async Task<string> WaitAsync(long sinceId, int seconds, string? keyword, CancellationToken ct)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(Math.Clamp(seconds, 2, 300));
-        var key = string.IsNullOrWhiteSpace(keyword) ? null : Normalize(keyword);
+        var started = Stopwatch.GetTimestamp();
+        var timeout = TimeSpan.FromSeconds(Math.Clamp(seconds, 2, 300));
+        var key = keyword is null ? "" : Normalize(keyword);
         long? meetingId = null;
+        var cursor = Math.Max(0, sinceId);
+        var context = new Queue<StoredSegment>();
         while (true)
         {
             using (var store = openStore())
@@ -174,19 +178,29 @@ public sealed class MeetingTools(Func<ITranscriptStore> openStore, IAppControl a
                 meetingId ??= store.GetLatestOpenMeeting()?.Id;
                 if (meetingId is { } id)
                 {
-                    var segs = store.GetSegmentsAfter(id, Math.Max(0, sinceId));
-                    var mentioned = key is not null && segs.Any(s => Normalize(s.Segment.Text).Contains(key, StringComparison.Ordinal));
-                    if (segs.Count > 0 && (key is null || mentioned))
+                    var segs = store.GetSegmentsAfter(id, cursor);
+                    foreach (var segment in segs)
+                    {
+                        context.Enqueue(segment);
+                        if (context.Count > 500) context.Dequeue();
+                    }
+                    var mentioned = key.Length > 0 && segs.Any(s => Normalize(s.Segment.Text).Contains(key, StringComparison.Ordinal));
+                    if (segs.Count > 0 && (key.Length == 0 || mentioned))
                     {
                         var sb = new StringBuilder();
                         if (mentioned) sb.AppendLine($"🔔 te nombraron («{keyword}»). Responde con la herramienta decir si corresponde.");
-                        foreach (var s in segs) sb.AppendLine($"[{TimeFormat.Hms(s.Segment.Start)}] [{s.Segment.Label}] {s.Segment.Text}");
+                        foreach (var s in context) sb.AppendLine($"[{TimeFormat.Hms(s.Segment.Start)}] [{s.Segment.Label}] {s.Segment.Text}");
                         sb.Append(CultureInfo.InvariantCulture, $"— reunión #{id} · siguiente desde_id: {segs[^1].Id}");
                         return sb.ToString();
                     }
+                    if (segs.Count > 0)
+                    {
+                        cursor = segs[^1].Id;
+                        if (Stopwatch.GetElapsedTime(started) < timeout && !ct.IsCancellationRequested) continue;
+                    }
                 }
             }
-            if (DateTime.UtcNow >= deadline || ct.IsCancellationRequested)
+            if (Stopwatch.GetElapsedTime(started) >= timeout || ct.IsCancellationRequested)
                 return meetingId is null
                     ? "No hay una reunión en curso (en el Meet, pulsa «Transcribir» en el panel de MeetAgent)."
                     : $"(sin novedades) — siguiente desde_id: {sinceId}";

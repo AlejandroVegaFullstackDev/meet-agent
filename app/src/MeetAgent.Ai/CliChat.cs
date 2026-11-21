@@ -6,7 +6,7 @@ using MeetAgent.Core.Ports;
 namespace MeetAgent.Ai;
 
 /// <summary>
-/// Usa la cuenta que el usuario ya tiene en Claude Code, Codex o Gemini CLI: lanza el CLI con las
+/// Usa la cuenta que el usuario ya tiene en Claude Code o Gemini CLI: lanza el CLI con las
 /// instrucciones por parámetro y el contenido por stdin. Sin API key y sin gastar de más.
 /// </summary>
 /// <param name="run">Ejecutor de procesos; en pruebas, uno falso.</param>
@@ -39,7 +39,6 @@ public sealed class CliChat(Connection connection, ProcessRunner? run = null, st
             return provider switch
             {
                 AiProvider.ClaudeCuenta => await RunClaude(exe, dir, instructions, user, timeout.Token).ConfigureAwait(false),
-                AiProvider.ChatGptCuenta => await RunCodex(exe, dir, $"{instructions}\n\n{user}", timeout.Token).ConfigureAwait(false),
                 AiProvider.GeminiCuenta => await RunGemini(exe, dir, instructions, user, timeout.Token).ConfigureAwait(false),
                 _ => throw new AiException("Ese proveedor no usa una cuenta del sistema."),
             };
@@ -64,16 +63,6 @@ public sealed class CliChat(Connection connection, ProcessRunner? run = null, st
         var (exit, output) = await _run(info, user, ct).ConfigureAwait(false);
         EnsureOk(exit, output);
         return ParseClaude(output);
-    }
-
-    private async Task<string> RunCodex(string exe, string dir, string prompt, CancellationToken ct)
-    {
-        var resultPath = Path.Combine(dir, $"codex-{Guid.NewGuid():N}.txt");
-        var info = Start(exe, dir, Arguments("codex", null, resultPath));
-        var (exit, output) = await _run(info, prompt, ct).ConfigureAwait(false);
-        EnsureOk(exit, output);
-        var answer = File.Exists(resultPath) ? File.ReadAllText(resultPath) : output;
-        return string.IsNullOrWhiteSpace(answer) ? throw new AiException("ChatGPT no devolvió una respuesta. Inténtalo de nuevo.") : answer.Trim();
     }
 
     private async Task<string> RunGemini(string exe, string dir, string instructions, string user, CancellationToken ct)
@@ -105,14 +94,6 @@ public sealed class CliChat(Connection connection, ProcessRunner? run = null, st
             "--disable-slash-commands",
             "--no-session-persistence",
             "--output-format", "json",
-        ],
-        "codex" =>
-        [
-            "exec",
-            "--skip-git-repo-check",
-            "--sandbox", "read-only",
-            "-o", resultPath ?? "",
-            "-",
         ],
         "gemini" =>
         [

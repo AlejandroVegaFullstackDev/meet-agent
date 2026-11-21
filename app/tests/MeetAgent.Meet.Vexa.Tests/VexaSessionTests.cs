@@ -91,11 +91,17 @@ public class BotMeetingSessionTests
             Task.FromResult(Polls.Count > 1 ? Polls.Dequeue() : Polls.Peek());
     }
 
-    private sealed class MemoryStore : ITranscriptStore
+    private sealed class MemoryStore(bool failStart = false) : ITranscriptStore
     {
         public readonly List<TranscriptSegment> Segments = new();
         public string? Consent, Title; public bool Ended;
-        public long StartMeeting(string title, DateTimeOffset startedAt, string consent) { Title = title; Consent = consent; return 9; }
+        public long StartMeeting(string title, DateTimeOffset startedAt, string consent)
+        {
+            if (failStart) throw new IOException("No hay espacio");
+            Title = title;
+            Consent = consent;
+            return 9;
+        }
         public void EndMeeting(long meetingId, DateTimeOffset endedAt) => Ended = true;
         public void AddSegment(long meetingId, TranscriptSegment segment) => Segments.Add(segment);
         public Meeting? GetMeeting(long meetingId) => null;
@@ -160,5 +166,16 @@ public class BotMeetingSessionTests
         var session = new BotMeetingSession(api, new MemoryStore());
         await Assert.ThrowsAsync<ArgumentException>(() => session.StartAsync("https://zoom.us/j/1", "x", CancellationToken.None));
         Assert.Null(api.Started);
+    }
+
+    [Fact]
+    public async Task Si_falla_el_guardado_inicial_saca_al_bot_que_ya_fue_invitado()
+    {
+        var api = new FakeApi();
+        var session = new BotMeetingSession(api, new MemoryStore(failStart: true));
+        await Assert.ThrowsAsync<IOException>(() => session.StartAsync("abc-defg-hij", "x", CancellationToken.None));
+        Assert.Equal("abc-defg-hij", api.Started);
+        Assert.Equal(api.Started, api.Stopped);
+        Assert.False(session.IsRunning);
     }
 }

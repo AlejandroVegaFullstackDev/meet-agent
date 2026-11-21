@@ -15,6 +15,7 @@ public sealed class MeetingSession(
     double chunkSeconds = 5,
     double overlapSeconds = 1)
 {
+    private readonly SemaphoreSlim _lifecycle = new(1, 1);
     private CancellationTokenSource? _cts;
     private Task _completion = Task.CompletedTask;
 
@@ -29,55 +30,103 @@ public sealed class MeetingSession(
     public Task Completion => _completion;
 
     /// <returns>false si no hubo consentimiento y no se arrancó nada.</returns>
-    public Task<bool> StartAsync(Consent consent, string title)
+    public async Task<bool> StartAsync(Consent consent, string title)
     {
-        if (IsRunning) throw new InvalidOperationException("Ya hay una reunión en curso.");
-        if (consent == Consent.None) return Task.FromResult(false);
-
-        var mic = sources.CreateMicrophone();
-        var loop = sources.CreateLoopback();
-        mic.Log += m => Log?.Invoke(m);
-        loop.Log += m => Log?.Invoke(m);
-
-        var id = store.StartMeeting(title, DateTimeOffset.Now, consent.ToStoreValue());
-        MeetingId = id;
-        var sinks = consent == Consent.RecordAndTranscribe
-            ? new Dictionary<Speaker, IRecordingSink> { [Speaker.Yo] = recordings.Open(id, Speaker.Yo), [Speaker.Otros] = recordings.Open(id, Speaker.Otros) }
-            : null;
-
-        var live = new LiveTranscription([mic, loop], transcriber, vad, chunkSeconds, overlapSeconds)
+        await _lifecycle.WaitAsync().ConfigureAwait(false);
+        try
         {
-            OnAudio = sinks is null ? null : (sp, block) => { lock (sinks) sinks[sp].Write(block); },
-        };
-        Stats = live.Stats;
-        _cts = new CancellationTokenSource();
-        var ct = _cts.Token;
+            if (IsRunning) throw new InvalidOperationException("Ya hay una reunión en curso.");
+            if (consent == Consent.None) return false;
 
-        _completion = Task.Run(async () =>
+            await StartCoreAsync(consent, title).ConfigureAwait(false);
+            return true;
+        }
+        finally { _lifecycle.Release(); }
+    }
+
+    private async Task StartCoreAsync(Consent consent, string title)
+    {
+        IAudioSource? mic = null, loop = null;
+        long? openedMeeting = null;
+        var sinks = new Dictionary<Speaker, IRecordingSink>();
+        var cts = new CancellationTokenSource();
+        try
         {
-            try
+            mic = sources.CreateMicrophone();
+            loop = sources.CreateLoopback();
+            mic.Log += m => Log?.Invoke(m);
+            loop.Log += m => Log?.Invoke(m);
+
+            var id = store.StartMeeting(title, DateTimeOffset.Now, consent.ToStoreValue());
+            openedMeeting = id;
+            if (consent == Consent.RecordAndTranscribe)
             {
-                await foreach (var seg in live.RunAsync(ct).ConfigureAwait(false))
+                sinks.Add(Speaker.Yo, recordings.Open(id, Speaker.Yo));
+                sinks.Add(Speaker.Otros, recordings.Open(id, Speaker.Otros));
+            }
+            var live = new LiveTranscription([mic, loop], transcriber, vad, chunkSeconds, overlapSeconds)
+            {
+                OnAudio = sinks.Count == 0 ? null : (sp, block) => { lock (sinks) sinks[sp].Write(block); },
+            };
+            MeetingId = id;
+            Stats = live.Stats;
+            _cts = cts;
+            _completion = Task.Run(async () =>
+            {
+                try
                 {
-                    store.AddSegment(id, seg);
-                    SegmentReceived?.Invoke(seg);
+                    await foreach (var seg in live.RunAsync(cts.Token).ConfigureAwait(false))
+                    {
+                        store.AddSegment(id, seg);
+                        SegmentReceived?.Invoke(seg);
+                    }
                 }
-            }
-            finally
-            {
-                store.EndMeeting(id, DateTimeOffset.Now);
-                if (sinks is not null) foreach (var s in sinks.Values) s.Dispose();
-                await mic.DisposeAsync().ConfigureAwait(false);
-                await loop.DisposeAsync().ConfigureAwait(false);
-            }
-        }, CancellationToken.None);
-        return Task.FromResult(true);
+                finally
+                {
+                    try { await CloseAsync(id, mic, loop, sinks).ConfigureAwait(false); }
+                    finally
+                    {
+                        await _lifecycle.WaitAsync().ConfigureAwait(false);
+                        try { _cts = null; cts.Dispose(); }
+                        finally { _lifecycle.Release(); }
+                    }
+                }
+            });
+        }
+        catch
+        {
+            cts.Dispose();
+            await CloseAsync(openedMeeting, mic, loop, sinks).ConfigureAwait(false);
+            throw;
+        }
     }
 
     /// <summary>Corta la captura y espera a que la cola termine de transcribir lo ya capturado.</summary>
     public async Task StopAsync()
     {
-        _cts?.Cancel();
-        await _completion.ConfigureAwait(false);
+        Task completion;
+        await _lifecycle.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            _cts?.Cancel();
+            completion = _completion;
+        }
+        finally { _lifecycle.Release(); }
+        await completion.ConfigureAwait(false);
+    }
+
+    private async Task CloseAsync(long? id, IAudioSource? mic, IAudioSource? loop, Dictionary<Speaker, IRecordingSink> sinks)
+    {
+        try
+        {
+            if (id is { } meetingId) store.EndMeeting(meetingId, DateTimeOffset.Now);
+        }
+        finally
+        {
+            await using var microphone = mic;
+            await using var loopback = loop;
+            using var microphoneRecording = sinks.GetValueOrDefault(Speaker.Yo);
+            using var loopbackRecording = sinks.GetValueOrDefault(Speaker.Otros);
+        }
     }
 }

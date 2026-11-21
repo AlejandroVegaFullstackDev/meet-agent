@@ -110,4 +110,30 @@ public class HistoryViewModelTests
         vm.RefreshCommand.Execute(null);
         Assert.Equal("Nueva desde la extensión", vm.Meetings[0].Title);
     }
+
+    [AvaloniaFact]
+    public void Exportar_con_un_analisis_guardado_roto_no_cierra_la_app()
+    {
+        var store = new SqliteTranscriptStore("Data Source=:memory:");
+        using var _s = store;
+        var id = store.StartMeeting("Daily", T0, "transcribir");
+        store.AddSegment(id, new TranscriptSegment(Speaker.Yo, TimeSpan.Zero, TimeSpan.FromSeconds(2), "Hola"));
+        store.SaveInsights(id, "{ \"resumen\": }", "modelo", T0);
+        var dir = Directory.CreateTempSubdirectory("meetagent-roto-").FullName;
+        var vm = new HistoryViewModel(store, dir, store, now: () => T0);
+        try
+        {
+            vm.Refresh();
+            vm.Selected = vm.Meetings.Single();
+
+            vm.ExportCommand.Execute(null);
+
+            Assert.True(File.Exists(Path.Combine(dir, $"reunion-{id}.md")));
+            Assert.Equal("Reunión exportada a Markdown.", vm.Message);
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
 }

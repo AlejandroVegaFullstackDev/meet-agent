@@ -29,6 +29,7 @@ public sealed class WasapiAudioSource : IAudioSource
     private PcmConverter? _converter;
     private MMDeviceNotificationClient? _notifications;
     private string? _deviceId;
+    private bool _closed;
 
     public WasapiAudioSource(Speaker speaker, DataFlow flow)
     {
@@ -43,6 +44,7 @@ public sealed class WasapiAudioSource : IAudioSource
     public async IAsyncEnumerable<short[]> ReadAsync([EnumeratorCancellation] CancellationToken ct)
     {
         _channel = Channel.CreateBounded<short[]>(new BoundedChannelOptions(256) { FullMode = BoundedChannelFullMode.DropOldest });
+        lock (_gate) _closed = false;
         OpenDefault();
         _notifications = _enumerator.CreateNotificationClient(false);
         _notifications.DefaultDeviceChanged += (_, e) =>
@@ -67,10 +69,22 @@ public sealed class WasapiAudioSource : IAudioSource
     {
         lock (_gate)
         {
+            // La notificación puede llegar después de terminar la reunión: no se vuelve a abrir el micrófono.
+            if (_closed) return;
             var old = Description;
             CloseCapture();
-            OpenDefault();
-            Log?.Invoke($"[{Speaker}] cambio de dispositivo por defecto: {old} → {Description}");
+            try
+            {
+                OpenDefault();
+                Log?.Invoke($"[{Speaker}] cambio de dispositivo por defecto: {old} → {Description}");
+            }
+            catch (Exception ex)
+            {
+                // Corre en el ThreadPool: una excepción aquí cerraría la app (p. ej. al desconectar el
+                // último micrófono). Se avisa y se espera al próximo cambio de dispositivo.
+                CloseCapture();
+                Log?.Invoke($"[{Speaker}] no se pudo abrir el nuevo dispositivo ({ex.Message}); sin audio hasta que vuelva uno.");
+            }
         }
     }
 
@@ -111,7 +125,11 @@ public sealed class WasapiAudioSource : IAudioSource
 
     private void Close()
     {
-        lock (_gate) CloseCapture();
+        lock (_gate)
+        {
+            _closed = true;
+            CloseCapture();
+        }
         _notifications?.Dispose();
         _notifications = null;
         _channel?.Writer.TryComplete();

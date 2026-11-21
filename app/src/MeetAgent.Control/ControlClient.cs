@@ -23,7 +23,7 @@ public sealed class ControlClient(string? name = null) : IAppControl
             await pipe.ConnectAsync(TimeSpan.FromSeconds(1), cts.Token).ConfigureAwait(false);
             await using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
             using var reader = new StreamReader(pipe, leaveOpen: true);
-            await writer.WriteLineAsync(JsonSerializer.Serialize(request, ControlJson.Options)).ConfigureAwait(false);
+            await writer.WriteLineAsync(JsonSerializer.Serialize(request, ControlJson.Options).AsMemory(), cts.Token).ConfigureAwait(false);
             var line = await reader.ReadLineAsync(cts.Token).ConfigureAwait(false);
             return line is null ? null : JsonSerializer.Deserialize<ControlResponse>(line, ControlJson.Options);
         }

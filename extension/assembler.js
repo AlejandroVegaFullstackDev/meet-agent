@@ -12,7 +12,7 @@
   /** Une la versión anterior de un bloque con la nueva sin perder ni duplicar texto. */
   function mergeCaption(full, incoming) {
     if (!full) return incoming;
-    if (incoming.startsWith(full)) return incoming;                    // creció
+    if (incoming.toLowerCase().startsWith(full.toLowerCase())) return incoming;
     if (full.includes(incoming)) return full;                          // parpadeo: ese trozo ya está
     const probe = incoming.slice(0, Math.min(PROBE, incoming.length));
     if (probe.length >= MIN_PROBE) {
@@ -45,30 +45,39 @@
      * @param {number} [o.maxPendingChars] en monólogos largos, se corta en la última oración completa
      * @param {string} [o.selfName]    nombre del usuario, para «Tú»/«You»
      */
-    constructor({ startMs, stableMs = 2000, maxPendingChars = 280, selfName = null }) {
+    constructor({ startMs, stableMs = 2000, maxPendingChars = 280, selfName = null, trackEvents = false }) {
       this.startMs = startMs;
       this.stableMs = stableMs;
       this.maxPendingChars = maxPendingChars;
       this.selfName = selfName;
+      this.trackEvents = trackEvents;
+      this.nextEvent = 1;
       this.blocks = new Map();
     }
 
     observe(key, speaker, text, nowMs) {
       const t = (text || '').replace(/\s+/g, ' ').trim();
-      if (!t) return;
+      if (!t) return [];
+      const label = speaker?.trim() || '';
       let b = this.blocks.get(key);
+      const previous = b?.speaker && label && b.speaker !== label ? this.remove(key, nowMs) : [];
+      b = this.blocks.get(key);
       if (!b) {
         b = { speaker: '', full: '', emitted: 0, emittedText: '', pendingStart: null, lastChange: nowMs };
         this.blocks.set(key, b);
       }
-      if (speaker && speaker.trim()) b.speaker = speaker.trim();
+      if (label) b.speaker = label;
       const merged = mergeCaption(b.full, t);
       if (merged !== b.full) {
-        if (b.pendingStart === null) b.pendingStart = nowMs;
+        if (b.pendingStart === null) {
+          b.pendingStart = nowMs;
+          b.eventId = String(this.nextEvent++);
+        }
         b.full = merged;
         b.lastChange = nowMs;
         if (b.emitted > b.full.length) b.emitted = b.full.length;
       }
+      return previous;
     }
 
     /** Segmentos listos: bloques quietos durante stableMs, o cortes por oración en monólogos largos. */
@@ -119,12 +128,26 @@
       return out.sort((x, y) => x.start - y.start);
     }
 
+    /** Copia los borradores recuperables sin darlos por definitivos ni avanzar sus identificadores. */
+    checkpoint(nowMs) {
+      const out = [];
+      for (const block of this.blocks.values()) {
+        const b = { ...block };
+        resync(b);
+        if (b.full.slice(b.emitted).trim())
+          out.push(this.#emit(b, b.full.length, Math.min(nowMs, b.lastChange)));
+      }
+      return out.sort((x, y) => x.start - y.start);
+    }
+
     #emit(b, upTo, endMs) {
       const text = b.full.slice(b.emitted, upTo).trim();
+      const eventId = b.eventId;
       const startMs = b.pendingStart ?? endMs;
       b.emitted = upTo;
       b.emittedText = b.full.slice(0, upTo);
       b.pendingStart = b.full.slice(upTo).trim() ? endMs : null;
+      if (b.pendingStart !== null) b.eventId = String(this.nextEvent++);
       const self = SELF_LABELS.has(b.speaker.toLowerCase());
       return {
         speaker: self ? (this.selfName || 'Yo') : (b.speaker || 'Participante'),
@@ -132,6 +155,7 @@
         start: round((startMs - this.startMs) / 1000),
         end: round((Math.max(endMs, startMs) - this.startMs) / 1000),
         text,
+        ...(this.trackEvents ? { eventId } : {}),
       };
     }
   }

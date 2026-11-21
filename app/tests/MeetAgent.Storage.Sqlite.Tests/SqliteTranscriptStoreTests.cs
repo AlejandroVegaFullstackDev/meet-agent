@@ -65,6 +65,33 @@ public class SqliteTranscriptStoreTests
         Assert.Empty(store.Search("hola) OR (\"*"));
     }
 
+    [Theory]
+    [InlineData("pre-venta")]
+    [InlineData("pre-venta - presu*")]
+    [InlineData("pre-venta \"está aprobado\"")]
+    [InlineData("\"pre-venta")]
+    public void Busca_literales_sin_perder_prefijos_ni_frases(string query)
+    {
+        using var store = NewStore();
+        var id = store.StartMeeting("x", T0, "transcribir");
+        store.AddSegment(id, S(Speaker.Yo, 0, "El presupuesto de pre-venta está aprobado"));
+        store.AddSegment(id, S(Speaker.Yo, 4, "pre y venta"));
+        Assert.Equal(TimeSpan.Zero, Assert.Single(store.Search(query)).Segment.Start);
+    }
+
+    [Fact]
+    public void Ordena_por_instante_aunque_cambie_el_offset_o_solo_un_tick()
+    {
+        using var store = NewStore();
+        var latest = store.StartMeeting("más reciente", T0.AddTicks(1), "transcribir");
+        var earlier = store.StartMeeting("anterior", T0.ToOffset(TimeSpan.FromHours(2)), "transcribir");
+        store.AddSegment(earlier, S(Speaker.Yo, 0, "presupuesto"));
+        store.AddSegment(latest, S(Speaker.Yo, 0, "presupuesto"));
+        Assert.Equal([latest, earlier], store.ListMeetings().Select(m => m.Id));
+        Assert.Equal(latest, store.GetLatestOpenMeeting()!.Id);
+        Assert.Equal([latest, earlier], store.Search("presupuesto").Select(m => m.MeetingId));
+    }
+
     [Fact]
     public void Lista_reuniones_de_la_mas_reciente_a_la_mas_antigua()
     {

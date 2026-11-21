@@ -66,6 +66,13 @@ public class MeetingAnalysisTests
         Assert.Throws<FormatException>(() => MeetingInsights.Parse("no sé"));
 
     [Fact]
+    public void Parse_omite_entradas_nulas_en_las_tareas()
+    {
+        var insights = MeetingInsights.Parse("""{"resumen":"Resumen","tareas":[null,{"tarea":"Avisar"}]}""");
+        Assert.Equal("Avisar", Assert.Single(insights.Tareas).Tarea);
+    }
+
+    [Fact]
     public void ToSections_separa_texto_y_vinetas_y_omite_lo_vacio()
     {
         var i = new MeetingInsights("Resumen corto.", ["D1"], [new ActionItem("T1", "Luis", "viernes")],

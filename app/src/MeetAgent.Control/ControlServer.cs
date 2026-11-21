@@ -15,43 +15,54 @@ public sealed class ControlServer : IAsyncDisposable
     {
         _name = name;
         _handler = handler;
-        _loop = Task.Run(LoopAsync);
+        var token = _cts.Token;
+        _loop = Task.Run(() => LoopAsync(token));
     }
 
     public static ControlServer Start(string name, Func<ControlRequest, Task<ControlResponse>> handler) => new(name, handler);
 
-    private async Task LoopAsync()
+    private async Task LoopAsync(CancellationToken ct)
     {
-        while (!_cts.IsCancellationRequested)
+        while (!ct.IsCancellationRequested)
         {
             var pipe = new NamedPipeServerStream(_name, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances,
                 PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-            try { await pipe.WaitForConnectionAsync(_cts.Token).ConfigureAwait(false); }
-            catch (OperationCanceledException) { await pipe.DisposeAsync(); break; }
-            _ = Task.Run(() => HandleAsync(pipe));
+            try { await pipe.WaitForConnectionAsync(ct).ConfigureAwait(false); }
+            catch
+            {
+                await pipe.DisposeAsync();
+                throw;
+            }
+            _ = Task.Run(() => HandleAsync(pipe, ct));
         }
     }
 
-    private async Task HandleAsync(NamedPipeServerStream pipe)
+    private async Task HandleAsync(NamedPipeServerStream pipe, CancellationToken ct)
     {
         await using var _ = pipe;
-        using var reader = new StreamReader(pipe, leaveOpen: true);
-        await using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
-        ControlResponse response;
+        using var shutdown = ct.Register(static state => ((NamedPipeServerStream)state!).Dispose(), pipe);
         try
         {
-            var line = await reader.ReadLineAsync(_cts.Token).ConfigureAwait(false);
-            var request = line is null ? null : JsonSerializer.Deserialize<ControlRequest>(line, ControlJson.Options);
-            response = request is null
-                ? new ControlResponse(false, false, null, null, "Petición vacía")
-                : await _handler(request).ConfigureAwait(false);
+            using var reader = new StreamReader(pipe, leaveOpen: true);
+            ControlResponse response;
+            try
+            {
+                var line = await reader.ReadLineAsync(ct).ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
+                var request = line is null ? null : JsonSerializer.Deserialize<ControlRequest>(line, ControlJson.Options);
+                response = request is null
+                    ? new ControlResponse(false, false, null, null, "Petición vacía")
+                    : await _handler(request).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not IOException && !ct.IsCancellationRequested)
+            {
+                response = new ControlResponse(false, false, null, null, $"Error en la app: {ex.Message}");
+            }
+            ct.ThrowIfCancellationRequested();
+            var lineBytes = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response, ControlJson.Options) + "\n");
+            await pipe.WriteAsync(lineBytes, ct).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            response = new ControlResponse(false, false, null, null, $"Error en la app: {ex.Message}");
-        }
-        try { await writer.WriteLineAsync(JsonSerializer.Serialize(response, ControlJson.Options)).ConfigureAwait(false); }
-        catch (IOException) { }
+        catch (Exception ex) when (ex is IOException or OperationCanceledException || ct.IsCancellationRequested) { }
     }
 
     public async ValueTask DisposeAsync()

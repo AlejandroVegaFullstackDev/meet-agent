@@ -21,22 +21,19 @@ public sealed record AccountConnectResult(AccountConnectStatus Status, string? M
 }
 
 /// <summary>
-/// Conecta una cuenta con un clic: comprueba si el componente oficial ya está instalado, pide permiso
-/// para instalarlo si falta, abre el inicio de sesión en el navegador y espera sin mostrar una consola.
+/// Conecta con un clic la cuenta de Claude o Google cuando su programa oficial ya está en el equipo:
+/// abre el inicio de sesión en el navegador y espera sin mostrar una consola. Nunca instala nada;
+/// si falta, ofrece el camino sin instalar (OpenRouter o una key). ChatGPT usa <see cref="ChatGptLogin"/>.
 /// </summary>
 public sealed class AccountConnector(
     Func<string, string?>? find = null,
     ProcessRunner? run = null,
-    AccountInstaller? installer = null,
-    Func<AiProvider, Task<bool>>? confirmInstall = null,
     string? home = null,
     TimeSpan? pollInterval = null,
     TimeSpan? loginTimeout = null)
 {
     private readonly ProcessRunner _run = run ?? ProcessRunnerDefault.RunAsync;
     private readonly AccountDetector _detector = new(find, run, home);
-    private readonly AccountInstaller _installer = installer ?? new AccountInstaller(run: run, find: find);
-    private readonly Func<AiProvider, Task<bool>> _confirmInstall = confirmInstall ?? (_ => Task.FromResult(false));
     private readonly TimeSpan _poll = pollInterval ?? TimeSpan.FromSeconds(2);
     private readonly TimeSpan _timeout = loginTimeout ?? TimeSpan.FromMinutes(5);
 
@@ -53,18 +50,9 @@ public sealed class AccountConnector(
         var state = await _detector.DetectAsync(provider, ct).ConfigureAwait(false);
         if (!state.Installed)
         {
-            if (!await _confirmInstall(provider).ConfigureAwait(false)) return AccountConnectResult.Cancelled;
-
-            progress?.Report("Instalando…");
-            var installed = await _installer.InstallAsync(provider, progress, ct).ConfigureAwait(false);
-            if (installed.Status == AccountInstallStatus.NeedsKey)
-                return AccountConnectResult.NeedsKey(installed.Message ?? "Puedes conectar Google con una API key.");
-            if (installed.Status == AccountInstallStatus.Failed)
-                return AccountConnectResult.Failed(installed.Message ?? "No pudimos instalar el componente.");
-
-            state = await _detector.DetectAsync(provider, ct).ConfigureAwait(false);
-            if (!state.Installed)
-                return AccountConnectResult.Failed("No encontramos el componente después de instalarlo. Puedes usar una API key.");
+            return provider == AiProvider.GeminiCuenta
+                ? AccountConnectResult.NeedsKey("Google se conecta con una key gratis: consíguela con tu cuenta de Google y pégala aquí.")
+                : AccountConnectResult.Failed("Para usar Claude sin instalar nada, inicia sesión con OpenRouter (más abajo) o usa una API key.");
         }
 
         if (!state.LoggedIn)
@@ -94,7 +82,6 @@ public sealed class AccountConnector(
         string[][] candidates = provider switch
         {
             AiProvider.ClaudeCuenta => [["auth", "login"], ["login"]],
-            AiProvider.ChatGptCuenta => [["login"]],
             _ => [[]],
         };
         foreach (var candidate in candidates)
@@ -123,8 +110,11 @@ public sealed class AccountConnector(
             var until = DateTimeOffset.UtcNow + _timeout;
             while (DateTimeOffset.UtcNow < until)
             {
+                // Si el programa de login ya terminó (cerró el navegador, falló), nadie va a completar la
+                // sesión: tras una última comprobación se avisa en vez de esperar los 5 minutos.
+                var ended = login.IsCompleted;
                 if ((await _detector.DetectAsync(provider, ct).ConfigureAwait(false)).LoggedIn) return true;
-                if (login.IsFaulted) return false;
+                if (ended) return false;
                 if (_poll > TimeSpan.Zero) await Task.Delay(_poll, ct).ConfigureAwait(false);
             }
             return false;

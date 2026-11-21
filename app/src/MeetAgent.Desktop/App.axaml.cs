@@ -43,13 +43,12 @@ public sealed class App : Application
                 _vm!.TranscriberName = services.Transcriber.Name;
             }
 
-            var connect = new ConnectViewModel(services.Settings, SaveSettings,
-                askInstall: provider => AccountInstallDialog.AskAsync(_window!, provider));
+            var connect = new ConnectViewModel(services.Settings, SaveSettings);
             var settings = new SettingsViewModel(services.Settings, SaveSettings);
             connect.Changed += () => settings.Reload(services.Settings);
             settings.Changed += () => connect.Reload(services.Settings);
             _vm = new MainViewModel(services.Session, services.Transcriber.Name,
-                askConsent: () => ConsentDialog.AskAsync(ShowWindow()),
+                askConsent: ct => ConsentDialog.AskAsync(ShowWindow(), ct),
                 ui: a => Dispatcher.UIThread.Post(a),
                 botFactory: services.BotFactory)
             {
@@ -117,6 +116,8 @@ public sealed class App : Application
                         var r = await Dispatcher.UIThread.InvokeAsync(() => vm.StartFromAgentAsync(req.Title));
                         if (r.AlreadyRunning)
                             return new ControlResponse(true, true, r.MeetingId, vm.Consent.ToStoreValue(), "Ya hay una reunión en curso.");
+                        if (r.TimedOut)
+                            return new ControlResponse(true, false, null, "nada", "El usuario no respondió a tiempo: no se inició la reunión.");
                         return r.Consent == Consent.None
                             ? new ControlResponse(true, false, null, "nada", "El usuario eligió «Nada»: no se inició la reunión.")
                             : new ControlResponse(true, true, r.MeetingId, r.Consent.ToStoreValue(),

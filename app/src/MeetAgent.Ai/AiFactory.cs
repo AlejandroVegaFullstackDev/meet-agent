@@ -13,7 +13,8 @@ public static class AiFactory
         if (!c.IsUsable) throw new AiException("Falta conectar tu IA. Elige una opción en Conectar IA.");
         return c.Provider switch
         {
-            AiProvider.ClaudeCuenta or AiProvider.ChatGptCuenta or AiProvider.GeminiCuenta => new CliChat(c),
+            AiProvider.ChatGptCuenta => new ChatGptPlanChat(Http, ChatGptSessionStore.Default, c.Model.Trim()),
+            AiProvider.ClaudeCuenta or AiProvider.GeminiCuenta => new CliChat(c),
             AiProvider.Anthropic => new AnthropicChat(c.ApiKey!, c.Model.Trim()),
             _ => new OpenAiCompatibleChat(Http, c.EffectiveBaseUrl, c.ApiKey, c.Model.Trim(), c.Info.Label),
         };

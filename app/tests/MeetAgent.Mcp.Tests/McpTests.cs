@@ -193,6 +193,24 @@ public class VoiceAndWaitToolsTests
     private static readonly DateTimeOffset T0 = new(2026, 10, 15, 9, 0, 0, TimeSpan.FromHours(-5));
 
     [Fact]
+    public async Task Busca_la_palabra_clave_despues_de_la_primera_pagina()
+    {
+        using var home = new TempHome();
+        using (var s = home.Open())
+        {
+            var id = s.StartMeeting("Meet", T0, "subtitulos");
+            for (var i = 0; i < 500; i++)
+                s.AddSegment(id, new TranscriptSegment(Speaker.Otros, TimeSpan.Zero, TimeSpan.Zero, "Contexto"));
+            s.AddSegment(id, new TranscriptSegment(Speaker.Otros, TimeSpan.Zero, TimeSpan.Zero, "Hola, Meet Agent"));
+        }
+        var tools = new MeetingTools(home.Open, new FakeApp(_ => null));
+        var result = await tools.WaitAsync(0, 2, "meetagent", default);
+        Assert.Contains("te nombraron", result);
+        Assert.Contains("Hola, Meet Agent", result);
+        Assert.Contains("siguiente desde_id: 501", result);
+    }
+
+    [Fact]
     public async Task Decir_manda_el_texto_al_Meet_y_avisa_si_no_hay_Meet_abierto()
     {
         using var home = new TempHome();
