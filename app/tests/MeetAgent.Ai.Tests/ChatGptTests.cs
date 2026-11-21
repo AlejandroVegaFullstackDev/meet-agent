@@ -114,7 +114,11 @@ public class ChatGptTests : IDisposable
         Assert.Equal("oaiapp_123", store.ClientId);
         Assert.Equal("at-1", store.Load()!.AccessToken);
         Assert.True(store.HasSession);
-        Assert.DoesNotContain("at-1", await File.ReadAllTextAsync(Path.Combine(_dir, "chatgpt.json")));
+        var saved = Path.Combine(_dir, "chatgpt.json");
+        if (OperatingSystem.IsWindows())
+            Assert.DoesNotContain("at-1", await File.ReadAllTextAsync(saved)); // DPAPI
+        else
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(saved)); // sin DPAPI: solo el dueño lo lee
     }
 
     [Fact]
